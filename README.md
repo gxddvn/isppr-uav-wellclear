@@ -41,7 +41,7 @@ Apache License 2.0 – див. LICENSE
 
 # ISPPR-UAV-WellClear
 
-# ISPPR-UAV-WellClear is a software module for modeling and implementing an Intelligent Decision Support System (IDSS) for unmanned aircraft system (UAS) operators to avoid collisions in congested airspace.
+ISPPR-UAV-WellClear is a software module for modeling and implementing an Intelligent Decision Support System (IDSS) for unmanned aircraft system (UAS) operators to avoid collisions in congested airspace.
 
 # Purpose
 
