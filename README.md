@@ -24,7 +24,7 @@ ISPPR-UAV-WellClear – програмний модуль для моделюв�
 
 - Обробка великих аеронавігаційних даних
 
-Usage / Використання
+# Usage / Використання
 # Клонувати репозиторій
 git clone https://github.com/yourusername/ISPPR-UAV-WellClear.git
 
@@ -34,38 +34,38 @@ pip install -r requirements.txt
 # Запуск симуляції або модуля прийняття рішень
 python run_simulation.py
 
-License / Ліцензія
+# License / Ліцензія
 
 Apache License 2.0 – див. LICENSE
 
 
-ISPPR-UAV-WellClear
+# ISPPR-UAV-WellClear
 
-ISPPR-UAV-WellClear is a software module for modeling and implementing an Intelligent Decision Support System (IDSS) for unmanned aircraft system (UAS) operators to avoid collisions in congested airspace.
+# ISPPR-UAV-WellClear is a software module for modeling and implementing an Intelligent Decision Support System (IDSS) for unmanned aircraft system (UAS) operators to avoid collisions in congested airspace.
 
-Purpose
+# Purpose
 
-Enhance safety of BVLOS operations for small UAS
+- Enhance safety of BVLOS operations for small UAS
 
-Optimize trajectories under potential collision threats
+- Optimize trajectories under potential collision threats
 
-Minimize the risk of Near Mid-Air Collision (NMAC)
+- Minimize the risk of Near Mid-Air Collision (NMAC)
 
-Support modeling of both correlated and uncorrelated encounters with other aircraft
+- Support modeling of both correlated and uncorrelated encounters with other aircraft
 
-Key Features
+# Key Features
 
-Model UAS operator actions during potential conflict scenarios
+- Model UAS operator actions during potential conflict scenarios
 
-Integrate "Well Clear" algorithms for small UAS (sUAS)
+- Integrate "Well Clear" algorithms for small UAS (sUAS)
 
-Utilize neural networks and AI methods for decision-making
+- Utilize neural networks and AI methods for decision-making
 
-Simulations and risk analysis for optimal flight path selection
+- Simulations and risk analysis for optimal flight path selection
 
-Processing of large aeronautical datasets
+- Processing of large aeronautical datasets
 
-Usage
+# Usage
 # Clone the repository
 git clone https://github.com/yourusername/ISPPR-UAV-WellClear.git
 
@@ -75,6 +75,6 @@ pip install -r requirements.txt
 # Run the simulation or decision module
 python run_simulation.py
 
-License
+# License
 
 Apache License 2.0 – see LICENSE
