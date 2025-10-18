@@ -26,7 +26,7 @@ ISPPR-UAV-WellClear – програмний модуль для моделюв�
 
 # Usage / Використання
 # Клонувати репозиторій
-git clone https://github.com/yourusername/ISPPR-UAV-WellClear.git
+git clone https://github.com/gxddvn/ISPPR-UAV-WellClear.git
 
 # Встановити залежності (приклад для Python)
 pip install -r requirements.txt
@@ -67,7 +67,7 @@ ISPPR-UAV-WellClear is a software module for modeling and implementing an Intell
 
 # Usage
 # Clone the repository
-git clone https://github.com/yourusername/ISPPR-UAV-WellClear.git
+git clone https://github.com/gxddvn/ISPPR-UAV-WellClear.git
 
 # Install dependencies (example for Python)
 pip install -r requirements.txt
