@@ -71,20 +71,43 @@ def draw_axis_arrow(pos, dir_vec, color=(1, 1, 1)):
     glEnable(GL_LIGHTING)
 
 
-def draw_trajectory(pos, yaw_deg, color=(1, 1, 0.2), length=80.0):
-    yaw = math.radians(yaw_deg)
-    dx = math.sin(yaw)
-    dz = math.cos(yaw)
-    sx, sy, sz = pos
-    ex, ey, ez = sx + dx * length, sy, sz + dz * length
-    glDisable(GL_LIGHTING)
-    glLineWidth(2.0)
+def draw_trajectory(pos, yaw, color=(1.0,1.0,1.0), length=50.0, forward_vector=(0,0,1), width=3.0):
+    """
+    Рисует траекторию модели от носа в направлении её forward_vector с учётом yaw.
+    
+    :param pos: [x, y, z] — позиция модели (центр)
+    :param yaw: float — поворот модели вокруг Y (в градусах)
+    :param color: RGB кортеж
+    :param length: длина траектории
+    :param forward_vector: локальная ось “вперед” модели (x, y, z)
+    """
+    x, y, z = pos
+    fx, fy, fz = forward_vector
+
+    # Преобразуем локальный forward в мировой с учётом yaw
+    # yaw = вращение вокруг Y
+    yaw_rad = math.radians(yaw)
+    world_fx = fx * math.cos(yaw_rad) + fz * math.sin(yaw_rad)
+    world_fz = -fx * math.sin(yaw_rad) + fz * math.cos(yaw_rad)
+    world_fy = fy  # Y не меняется
+
+    # Начало траектории — нос
+    nose_x = x + world_fx * length
+    nose_y = y + world_fy * length
+    nose_z = z + world_fz * length
+
+    # Конец линии — центр модели (или tail)
+    tail_x = x
+    tail_y = y
+    tail_z = z
+
     glColor3f(*color)
+    glLineWidth(width)
     glBegin(GL_LINES)
-    glVertex3f(sx, sy + 5.0, sz)
-    glVertex3f(ex, ey + 5.0, ez)
+    glVertex3f(nose_x, nose_y, nose_z)
+    glVertex3f(tail_x, tail_y, tail_z)
     glEnd()
-    glEnable(GL_LIGHTING)
+    glLineWidth(1.0)
 
 
 def create_display_list(mesh):

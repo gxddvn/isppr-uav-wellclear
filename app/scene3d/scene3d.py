@@ -109,6 +109,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         # Траєкторії
         if self.uav_list:
-            draw_trajectory(self.uav_pos, self.uav_yaw, (0.2, 1.0, 0.2))
+            draw_trajectory(self.uav_pos, self.uav_yaw, (0.2, 1.0, 0.2), forward_vector=(0,0,1), width=4.0)
         if self.plane_list:
-            draw_trajectory(self.plane_pos, self.plane_yaw, (1.0, 0.4, 0.4))
+            draw_trajectory(self.plane_pos, self.plane_yaw, (1.0, 0.4, 0.4), forward_vector=(-1,0,0), width=4.0)
