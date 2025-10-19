@@ -16,17 +16,13 @@ class SceneMouseHandler:
         if event.button() == Qt.MouseButton.LeftButton:
             modifiers = event.modifiers()
 
-            # Shift + ЛКМ = обертання моделі
+            # Shift + ЛКМ = обертання виділеної моделі
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                name, _ = pick_model_at(self, mx, my)
-                if name:
-                    self.selected = name
+                if self.selected:
                     self.is_rotating_model = True
-                else:
-                    self.selected = None
                 return
 
-            # Drag по гізмо = переміщення моделі по осях
+            # Курсор на гізмо = drag моделі по осях
             if self.selected and cursor_on_gizmo(self, mx, my):
                 self.is_dragging_model = True
                 self.drag_win_z = 0.5
@@ -38,12 +34,10 @@ class SceneMouseHandler:
                 name, winZ = pick_model_at(self, mx, my)
                 if name:
                     self.selected = name
-                    self.is_dragging_model = True
                     self.drag_win_z = winZ
-                    # Визначаємо ось для X/Y руху за замовчуванням
-                    self.drag_axis = (1, 1, 0)  # рух по X/Y, Z фіксовано
-                else:
-                    self.selected = None
+                    self.drag_axis = (1, 1, 0)
+                # не скасовувати виділення, якщо нічого не знайдено
+
 
         # Середній або ПКМ = обертання камери
         elif event.button() in [Qt.MouseButton.MiddleButton, Qt.MouseButton.RightButton]:

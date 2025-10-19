@@ -1,6 +1,7 @@
 import math
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from .camera import project_world_to_screen
 
 
 def project_world_to_screen(x, y, z):
@@ -17,58 +18,49 @@ def unproject_screen_to_world(winx, winy, winz):
     return gluUnProject(winx, winy, winz, model, proj, view)
 
 
-def pick_model_at(scene, mouse_x, mouse_y):
-    """Ray pick — визначає, у яку модель клікнув користувач."""
-    h = scene.height()
-    ogl_y = h - mouse_y
+def pick_model_at(scene, mouse_x, mouse_y, threshold=20):
+    """
+    Визначаємо, яку модель клікнув користувач,
+    через 2D координати на екрані.
+    
+    :param scene: Scene3D
+    :param mouse_x: координата X кліку миші
+    :param mouse_y: координата Y кліку миші
+    :param threshold: радіус вибору в пікселях
+    :return: (ім'я моделі, приблизний winZ) або (None, None)
+    """
+    candidates = []
 
-    start = unproject_screen_to_world(mouse_x, ogl_y, 0.0)
-    end = unproject_screen_to_world(mouse_x, ogl_y, 1.0)
-    if not start or not end:
-        return None, None
-
-    ox, oy, oz = start
-    ex, ey, ez = end
-
-    # 🔁 напрямок має бути в сторону камери
-    dx, dy, dz = (ox - ex, oy - ey, oz - ez)
-
-    def ray_sphere_t(ray_o, ray_d, center, radius):
-        ox, oy, oz = ray_o
-        dx, dy, dz = ray_d
-        cx, cy, cz = center
-        a = dx*dx + dy*dy + dz*dz
-        b = 2 * (dx*(ox-cx) + dy*(oy-cy) + dz*(oz-cz))
-        c = (ox-cx)**2 + (oy-cy)**2 + (oz-cz)**2 - radius*radius
-        disc = b*b - 4*a*c
-        if disc < 0:
-            return None
-        sqrt_d = math.sqrt(disc)
-        t1 = (-b - sqrt_d) / (2*a)
-        t2 = (-b + sqrt_d) / (2*a)
-        ts = [t for t in (t1, t2) if t > 1e-6]
-        if not ts:
-            return None
-        return min(ts)
-
-    spheres = [
-        ('uav', tuple(scene.uav_pos), 25.0),
-        ('plane', tuple(scene.plane_pos), 35.0),
+    models = [
+        ('uav', scene.uav_pos),
+        ('plane', scene.plane_pos),
     ]
 
-    hits = []
-    for name, center, radius in spheres:
-        t = ray_sphere_t((ox, oy, oz), (dx, dy, dz), center, radius)
-        if t is not None:
-            hits.append((t, name))
+    for name, pos in models:
+        screen = project_world_to_screen(*pos)
+        if screen is None:
+            continue
+        screen_x, screen_y, win_z = screen
 
-    if not hits:
+        # Y у OpenGL відліковується знизу, тому перевертаємо
+        screen_y = scene.height() - screen_y
+
+        dx = mouse_x - screen_x
+        dy = mouse_y - screen_y
+        dist = math.hypot(dx, dy)
+
+        if dist <= threshold:
+            candidates.append((dist, name, win_z))
+
+    if not candidates:
         return None, None
 
-    hits.sort(key=lambda x: x[0])
-    chosen_name = hits[0][1]
+    # Вибираємо модель з найменшою відстанню до курсора
+    candidates.sort(key=lambda x: x[0])
+    chosen_name = candidates[0][1]
+    chosen_win_z = candidates[0][2]
 
-    return chosen_name, 0.5
+    return chosen_name, chosen_win_z
 
 
 def cursor_on_gizmo(scene, mouse_x, mouse_y):

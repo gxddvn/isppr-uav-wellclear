@@ -1,5 +1,6 @@
 import math
 from OpenGL.GL import *
+from OpenGL.GLU import *
 
 def apply_camera(scene):
     ex = scene.camera_distance * math.cos(math.radians(scene.camera_pitch)) * math.sin(math.radians(scene.camera_yaw))
@@ -49,3 +50,9 @@ def _glu_look_at(eyeX, eyeY, eyeZ, centerX, centerY, centerZ, upX, upY, upZ):
     from OpenGL.GL import glMultMatrixf, glTranslatef
     glMultMatrixf([m[j][i] for i in range(4) for j in range(4)])
     glTranslatef(-eyeX, -eyeY, -eyeZ)
+
+def project_world_to_screen(x, y, z):
+    model = glGetDoublev(GL_MODELVIEW_MATRIX)
+    proj = glGetDoublev(GL_PROJECTION_MATRIX)
+    view = glGetIntegerv(GL_VIEWPORT)
+    return gluProject(x, y, z, model, proj, view)

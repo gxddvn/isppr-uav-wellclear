@@ -51,6 +51,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.is_rotating_camera = False
         self.drag_win_z = None
         self.drag_axis = None
+        self.allow_mouse_pick = True
 
     def initializeGL(self):
         glClearColor(0.1, 0.1, 0.12, 1.0)
