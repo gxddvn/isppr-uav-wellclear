@@ -1,0 +1,11 @@
+Model Information:
+* title:	UAV
+* source:	https://sketchfab.com/3d-models/uav-e39be240a697462c945e96a9a0f5d9d3
+* author:	dread_comrade (https://sketchfab.com/dread_comrade)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "UAV" (https://sketchfab.com/3d-models/uav-e39be240a697462c945e96a9a0f5d9d3) by dread_comrade (https://sketchfab.com/dread_comrade) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

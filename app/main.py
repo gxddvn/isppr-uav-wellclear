@@ -1,13 +1,142 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow
-import sys
+import sys, os
+
+ROOT = os.path.dirname(os.path.dirname(__file__))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout,
+    QTabWidget, QSplitter, QMenuBar, QStatusBar, QFileDialog, QMessageBox
+)
+from PyQt6.QtCore import Qt
+
+from app.widgets.model_browser import ModelBrowser
+from app.widgets.properties_panel import PropertiesPanel
+from app.widgets.templates_panel import TemplatesPanel
+from app.widgets.console_panel import ConsolePanel
+from app.widgets.simulation_panel import SimulationPanel
+from app.scene3d.scene3d_ui import Scene3DWithUI
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ISPPR-BPLA")
+        self.resize(1280, 720)
+
+        # === Меню ===
+        self._create_menu()
+
+        # === Центральна зона ===
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(2)
+
+        # === Верхня частина: сцена + панелі ===
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(splitter, stretch=10)
+
+        # Ліва панель з вкладками
+        left_tabs = QTabWidget()
+        left_tabs.addTab(ModelBrowser(), "Моделі")
+        left_tabs.addTab(PropertiesPanel(), "Параметри")
+        left_tabs.addTab(TemplatesPanel(), "Шаблони")
+        splitter.addWidget(left_tabs)
+
+        # Сцена (центр)
+        self.scene_container = Scene3DWithUI()
+        splitter.addWidget(self.scene_container)
+
+        # Панель управління симуляцією (справа)
+        self.sim_panel = SimulationPanel()
+        splitter.addWidget(self.sim_panel)
+
+        splitter.setSizes([250, 900, 250])
+
+        # === Нижня частина: консоль ===
+        self.console = ConsolePanel()
+        main_layout.addWidget(self.console, stretch=2)
+
+        # === Статусбар ===
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Готово")
+
+        # TODO: підключити сигнали з кнопок симуляції до функцій (start, pause, step)
+        # self.sim_panel.start_clicked.connect(self.start_simulation)
+        # self.sim_panel.stop_clicked.connect(self.stop_simulation)
+
+    def _create_menu(self):
+        menubar = QMenuBar()
+        self.setMenuBar(menubar)
+
+        # === Меню "Файл" ===
+        file_menu = menubar.addMenu("Файл")
+
+        action_new = file_menu.addAction("Новий проєкт")
+        action_open = file_menu.addAction("Відкрити...")
+        action_save = file_menu.addAction("Зберегти")
+        file_menu.addSeparator()
+        action_exit = file_menu.addAction("Вихід")
+
+        action_new.triggered.connect(self.new_project)
+        action_open.triggered.connect(self.open_project)
+        action_save.triggered.connect(self.save_project)
+        action_exit.triggered.connect(self.close)
+
+        # === Меню "Вид" ===
+        view_menu = menubar.addMenu("Вид")
+
+        toggle_console_action = view_menu.addAction("Показати/сховати консоль")
+        toggle_console_action.setCheckable(True)
+        toggle_console_action.setChecked(True)
+        toggle_console_action.triggered.connect(self.toggle_console)
+
+        # === Меню "Допомога" ===
+        help_menu = menubar.addMenu("Допомога")
+
+        about_action = help_menu.addAction("Про програму")
+        about_action.triggered.connect(self.show_about)
+    
+    def new_project(self):
+        # TODO: очистити сцену, скинути симуляцію
+        self.console.log("[Файл] Створено новий проєкт (заглушка)")
+        self.status_bar.showMessage("Новий проєкт створено")
+
+    def open_project(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Відкрити файл проєкту", "", "JSON Files (*.json);;All Files (*)")
+        if path:
+            # TODO: завантажити дані з JSON
+            self.console.log(f"[Файл] Відкрито файл: {path}")
+            self.status_bar.showMessage(f"Відкрито {path}")
+
+    def save_project(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Зберегти проєкт", "", "JSON Files (*.json)")
+        if path:
+            # TODO: серіалізувати сцену і дані у JSON
+            self.console.log(f"[Файл] Збережено проєкт: {path}")
+            self.status_bar.showMessage("Проєкт збережено")
+
+    def toggle_console(self, visible: bool):
+        self.console.setVisible(visible)
+        self.status_bar.showMessage("Консоль приховано" if not visible else "Консоль відображено")
+
+    def show_about(self):
+        QMessageBox.information(
+            self,
+            "Про програму",
+            "<b>ISPPR-BPLA</b><br>Система підтримки прийняття рішень оператора БПЛА.<br><br>"
+            "Розробник: Грищенко В.С.<br>"
+            "Ліцензія: Apache 2.0<br>"
+            "© 2025"
+        )
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setStyleSheet(open("app/style.qss", encoding="utf-8").read())
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

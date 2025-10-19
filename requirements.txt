@@ -1,7 +1,10 @@
 PyQt6
 PyOpenGL
+PyOpenGL_accelerate
 numpy
 scipy
 tensorflow
 scikit-learn
 matplotlib
+trimesh
+pygltflib
