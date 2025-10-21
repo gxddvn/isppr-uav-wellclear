@@ -9,6 +9,16 @@ def apply_camera(scene):
     glLoadIdentity()
     _glu_look_at(ex, ey, ez, 0, 0, 0, 0, 1, 0)
 
+def paintGL(self):
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glLoadIdentity()
+    apply_camera(self)
+
+    # 🔥 зберігаємо поточні матриці камери
+    self._modelview = glGetDoublev(GL_MODELVIEW_MATRIX)
+    self._projection = glGetDoublev(GL_PROJECTION_MATRIX)
+    self._viewport = glGetIntegerv(GL_VIEWPORT)
+
 def set_projection(w, h):
     from OpenGL.GL import glMatrixMode, glLoadIdentity, glFrustum, GL_PROJECTION, GL_MODELVIEW
     aspect = w / max(h, 1)

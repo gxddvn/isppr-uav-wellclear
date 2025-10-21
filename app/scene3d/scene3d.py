@@ -7,9 +7,7 @@ from OpenGL.GLU import *
 from .camera import apply_camera, set_projection
 from .draw_utils import draw_grid, draw_outline, draw_axis_gizmo, draw_trajectory, create_display_list
 from .model_loader import load_gltf_model
-from .picking import pick_model_at, cursor_on_gizmo, detect_gizmo_axis
 from .mouse_events import SceneMouseHandler
-
 
 class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def __init__(self, parent=None):
@@ -22,11 +20,9 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.camera_yaw = -180.0
         self.camera_pitch = 25.0
         self.rotate_sensitivity = 0.5
-        self.pan_sensitivity = 0.2  
 
         # Моделі
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
         try:
             self.uav_mesh = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\uav", "scene.gltf"))
             self.plane_mesh = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\plane", "scene.gltf"))
@@ -43,15 +39,8 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.uav_list = None
         self.plane_list = None
 
-        # Стани миші/гізмо
+        # Вибрана модель
         self.selected = None
-        self.last_mouse_pos = None
-        self.is_dragging_model = False
-        self.is_rotating_model = False
-        self.is_rotating_camera = False
-        self.drag_win_z = None
-        self.drag_axis = None
-        self.allow_mouse_pick = True
 
     def initializeGL(self):
         glClearColor(0.1, 0.1, 0.12, 1.0)

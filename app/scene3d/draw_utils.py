@@ -28,27 +28,28 @@ def draw_outline(list_id, pos, yaw):
     glPopAttrib()
 
 
-def draw_axis_gizmo(pos, size=40.0):
+def draw_axis_gizmo(pos, size=100.0):
     x, y, z = pos
     glDisable(GL_LIGHTING)
     glLineWidth(3.0)
     glBegin(GL_LINES)
 
-    # X — червона
+    # X — красная
     glColor3f(1.0, 0.2, 0.2)
     glVertex3f(x, y, z)
     glVertex3f(x + size, y, z)
 
-    # Y — зелена
-    glColor3f(0.2, 1.0, 0.2)
+    # Z — синяя
+    glColor3f(0.2, 0.2, 1.0)
     glVertex3f(x, y, z)
-    glVertex3f(x, y + size, z)
+    glVertex3f(x, y, z + size)
 
     glEnd()
     glEnable(GL_LIGHTING)
 
-    draw_axis_arrow((x + size, y, z), (1, 0, 0), (1.0, 0.2, 0.2))
-    draw_axis_arrow((x, y + size, z), (0, 1, 0), (0.2, 1.0, 0.2))
+    # Нарисовать стрелки на концах осей
+    draw_axis_arrow((x + size, y, z), (1, 0, 0), (1.0, 0.2, 0.2))  # X
+    draw_axis_arrow((x, y, z + size), (0, 0, 1), (0.2, 0.2, 1.0))  # Z
 
 
 def draw_axis_arrow(pos, dir_vec, color=(1, 1, 1)):
