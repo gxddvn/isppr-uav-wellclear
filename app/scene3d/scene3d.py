@@ -8,6 +8,9 @@ from .camera import apply_camera, set_projection
 from .draw_utils import draw_grid, draw_outline, draw_axis_gizmo, draw_trajectory, create_display_list
 from .model_loader import load_gltf_model
 from .mouse_events import SceneMouseHandler
+from .base_model import BaseModel3D
+from .uav import UAV
+from .obstacle import Obstacle
 
 class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def __init__(self, parent=None):
@@ -21,25 +24,24 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.camera_pitch = 25.0
         self.rotate_sensitivity = 0.5
 
-        # Моделі
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         try:
-            self.uav_mesh = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\uav", "scene.gltf"))
-            self.plane_mesh = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\plane", "scene.gltf"))
+            self.mesh_uav = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\uav", "scene.gltf"))
+            self.mesh_plane = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\plane", "scene.gltf"))
         except FileNotFoundError as e:
             print(f"[Scene3D] ⚠️ Model load failed: {e}")
-            self.uav_mesh = None
-            self.plane_mesh = None
+            self.mesh_uav = None
+            self.mesh_plane = None
 
-        self.uav_pos = [0.0, 0.0, 0.0]
-        self.plane_pos = [150.0, 0.0, -50.0]
-        self.uav_yaw = 0.0
-        self.plane_yaw = 180.0
+        # --- Масив моделей у сцені ---
+        self.objects = []
+        if self.mesh_uav:
+            self.objects.append(UAV("UAV #1", self.mesh_uav, [0.0, 0.0, 0.0], [0, 0, 0]))
+        if self.mesh_plane:
+            self.objects.append(Obstacle("Plane #1", self.mesh_plane, [150.0, 0.0, -50.0], [0, 0, 0]))
 
-        self.uav_list = None
-        self.plane_list = None
 
-        # Вибрана модель
+        # --- Поточний вибір ---
         self.selected = None
 
     def initializeGL(self):
@@ -55,10 +57,9 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         glLightfv(GL_LIGHT0, GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
 
-        if self.uav_mesh:
-            self.uav_list = create_display_list(self.uav_mesh)
-        if self.plane_mesh:
-            self.plane_list = create_display_list(self.plane_mesh)
+        for obj in self.objects:
+            if obj.mesh:
+                obj.display_list = create_display_list(obj.mesh)
 
     def resizeGL(self, w, h):
         set_projection(w, h)
@@ -70,34 +71,34 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         draw_grid()
 
-        # UAV
-        if self.uav_list:
-            glPushMatrix()
-            glTranslatef(*self.uav_pos)
-            glRotatef(self.uav_yaw, 0, 1, 0)
-            glColor3f(0.8, 0.8, 0.8)
-            glCallList(self.uav_list)
-            glPopMatrix()
+        for obj in self.objects:
+            obj.draw(selected=(self.selected == obj))
 
-        # Plane
-        if self.plane_list:
-            glPushMatrix()
-            glTranslatef(*self.plane_pos)
-            glRotatef(self.plane_yaw, 0, 1, 0)
-            glColor3f(0.9, 0.4, 0.4)
-            glCallList(self.plane_list)
-            glPopMatrix()
+        # --- Траєкторії для UAV та Obstacle ---
+        for obj in self.objects:
+            obj.draw_trajectory()
+    
+    def add_model(self, model_type: str):
+        """Додає нову модель до сцени."""
+        if model_type == "UAV":
+            mesh = self.mesh_uav
+            model = UAV(f"UAV #{len([o for o in self.objects if isinstance(o, UAV)]) + 1}", mesh, [0, 0, 0], [0, 0, 0])
+        else:
+            mesh = self.mesh_plane
+            model = Obstacle(f"Obstacle #{len([o for o in self.objects if isinstance(o, Obstacle)]) + 1}", mesh, [0, 0, 0], [0, 0, 0])
 
-        # Вибрана модель
-        if self.selected == 'uav' and self.uav_list:
-            draw_outline(self.uav_list, self.uav_pos, self.uav_yaw)
-            draw_axis_gizmo(self.uav_pos)
-        elif self.selected == 'plane' and self.plane_list:
-            draw_outline(self.plane_list, self.plane_pos, self.plane_yaw)
-            draw_axis_gizmo(self.plane_pos)
+        if not mesh:
+            print(f"[Scene3D] ❌ Mesh for {model_type} not loaded")
+            return None
 
-        # Траєкторії
-        if self.uav_list:
-            draw_trajectory(self.uav_pos, self.uav_yaw, (0.2, 1.0, 0.2), forward_vector=(0,0,1), width=4.0)
-        if self.plane_list:
-            draw_trajectory(self.plane_pos, self.plane_yaw, (1.0, 0.4, 0.4), forward_vector=(-1,0,0), width=4.0)
+        model.display_list = create_display_list(mesh)
+        self.objects.append(model)
+        self.update()
+        return model
+
+
+    def select_model(self, obj: BaseModel3D):
+        """Вибір моделі зі сцени."""
+        self.selected = obj
+        self.update()
+

@@ -15,8 +15,7 @@ from app.widgets.properties_panel import PropertiesPanel
 from app.widgets.templates_panel import TemplatesPanel
 from app.widgets.console_panel import ConsolePanel
 from app.widgets.simulation_panel import SimulationPanel
-from app.scene3d.scene3d_ui import Scene3DWithUI
-
+from app.scene3d.scene3d import Scene3D
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -37,17 +36,18 @@ class MainWindow(QMainWindow):
         # === Верхня частина: сцена + панелі ===
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, stretch=10)
-
+        
+        # Сцена (центр)
+        self.scene3d = Scene3D(self)
+        splitter.addWidget(self.scene3d)
+        
         # Ліва панель з вкладками
         left_tabs = QTabWidget()
-        left_tabs.addTab(ModelBrowser(), "Моделі")
+        self.model_browser = ModelBrowser(self.scene3d)
+        left_tabs.addTab(self.model_browser, "Моделі")
         left_tabs.addTab(PropertiesPanel(), "Параметри")
         left_tabs.addTab(TemplatesPanel(), "Шаблони")
         splitter.addWidget(left_tabs)
-
-        # Сцена (центр)
-        self.scene_container = Scene3DWithUI()
-        splitter.addWidget(self.scene_container)
 
         # Панель управління симуляцією (справа)
         self.sim_panel = SimulationPanel()
@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Готово")
+        self.model_browser.refresh_list()
 
         # TODO: підключити сигнали з кнопок симуляції до функцій (start, pause, step)
         # self.sim_panel.start_clicked.connect(self.start_simulation)

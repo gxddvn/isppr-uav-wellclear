@@ -14,42 +14,39 @@ def draw_grid(size=500, step=50):
     glEnable(GL_LIGHTING)
 
 
-def draw_outline(list_id, pos, yaw):
-    glPushAttrib(GL_ENABLE_BIT | GL_LINE_BIT | GL_POLYGON_BIT)
-    glDisable(GL_LIGHTING)
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-    glLineWidth(2.5)
-    glColor3f(0.1, 0.6, 1.0)
-    glPushMatrix()
-    glTranslatef(*pos)
-    glRotatef(yaw, 0, 1, 0)
-    glCallList(list_id)
-    glPopMatrix()
-    glPopAttrib()
-
-
-def draw_axis_gizmo(pos, size=100.0):
-    x, y, z = pos
-    glDisable(GL_LIGHTING)
+def draw_outline(display_list):
+    """Малює обводку навколо моделі в локальному просторі (glPushMatrix уже застосовано)"""
+    if not display_list:
+        return
+    glEnable(GL_BLEND)
+    glColor3f(0.2, 0.5, 1.0)  # синя рамка
     glLineWidth(3.0)
+    # просто викликаємо display_list як каркас або контур
+    glCallList(display_list)
+    glLineWidth(1.0)
+    glDisable(GL_BLEND)
+
+
+
+def draw_axis_gizmo(length=50.0):
+    """Малює осі X/Y/Z у поточному локальному просторі"""
+    glLineWidth(2.0)
     glBegin(GL_LINES)
-
-    # X — красная
-    glColor3f(1.0, 0.2, 0.2)
-    glVertex3f(x, y, z)
-    glVertex3f(x + size, y, z)
-
-    # Z — синяя
-    glColor3f(0.2, 0.2, 1.0)
-    glVertex3f(x, y, z)
-    glVertex3f(x, y, z + size)
-
+    # X - червона
+    glColor3f(1.0, 0.0, 0.0)
+    glVertex3f(0, 0, 0)
+    glVertex3f(length, 0, 0)
+    # Y - зелена
+    glColor3f(0.0, 1.0, 0.0)
+    glVertex3f(0, 0, 0)
+    glVertex3f(0, length, 0)
+    # Z - синя
+    glColor3f(0.0, 0.0, 1.0)
+    glVertex3f(0, 0, 0)
+    glVertex3f(0, 0, length)
     glEnd()
-    glEnable(GL_LIGHTING)
+    glLineWidth(1.0)
 
-    # Нарисовать стрелки на концах осей
-    draw_axis_arrow((x + size, y, z), (1, 0, 0), (1.0, 0.2, 0.2))  # X
-    draw_axis_arrow((x, y, z + size), (0, 0, 1), (0.2, 0.2, 1.0))  # Z
 
 
 def draw_axis_arrow(pos, dir_vec, color=(1, 1, 1)):
@@ -121,3 +118,28 @@ def create_display_list(mesh):
     glEnd()
     glEndList()
     return list_id
+
+def draw_ring(position, outer_radius=100.0, inner_radius=None, color=(0.2, 0.8, 0.2), alpha=0.3, segments=64):
+    if inner_radius is None:
+        inner_radius = outer_radius * 0.85
+
+    glPushMatrix()
+    glTranslatef(*position)
+
+    glDisable(GL_LIGHTING)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glColor4f(*color, alpha)
+
+    glBegin(GL_TRIANGLE_STRIP)
+    for i in range(segments + 1):
+        angle = 2 * math.pi * i / segments
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        glVertex3f(inner_radius * cos_a, 0.03, inner_radius * sin_a)
+        glVertex3f(outer_radius * cos_a, 0.03, outer_radius * sin_a)
+    glEnd()
+
+    glDisable(GL_BLEND)
+    glEnable(GL_LIGHTING)
+    glPopMatrix()

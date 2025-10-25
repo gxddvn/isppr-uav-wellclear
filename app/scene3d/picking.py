@@ -43,51 +43,27 @@ def unproject_screen_to_world(winx, winy, winz, scene=None):
     wx, wy, wz = gluUnProject(winx, winy, winz, model, proj, view)
     return wx, wy, wz
 
-
-
 def pick_model_at(scene, mouse_x, mouse_y, threshold=100):
     """
-    Визначаємо, яку модель клікнув користувач,
-    через 2D координати на екрані.
-    
-    :param scene: Scene3D
-    :param mouse_x: координата X кліку миші
-    :param mouse_y: координата Y кліку миші
-    :param threshold: радіус вибору в пікселях
-    :return: (ім'я моделі, приблизний winZ) або (None, None)
+    Визначає, яку модель клікнув користувач.
     """
     candidates = []
-
-    models = [
-        ('uav', scene.uav_pos),
-        ('plane', scene.plane_pos),
-    ]
-
-    for name, pos in models:
-        screen = project_world_to_screen(*pos)
+    for obj in scene.objects:
+        screen = project_world_to_screen(scene, *obj.pos)
         if screen is None:
             continue
-        screen_x, screen_y, win_z = screen
+        sx, sy, sz = screen
+        sy = scene.height() - sy  # переворот Y
 
-        # Y у OpenGL відліковується знизу, тому перевертаємо
-        screen_y = scene.height() - screen_y
-
-        dx = mouse_x - screen_x
-        dy = mouse_y - screen_y
-        dist = math.hypot(dx, dy)
-
+        dist = math.hypot(mouse_x - sx, mouse_y - sy)
         if dist <= threshold:
-            candidates.append((dist, name, win_z))
+            candidates.append((dist, obj))
 
     if not candidates:
-        return None, None
+        return None
 
-    # Вибираємо модель з найменшою відстанню до курсора
     candidates.sort(key=lambda x: x[0])
-    chosen_name = candidates[0][1]
-    chosen_win_z = candidates[0][2]
-
-    return chosen_name, chosen_win_z
+    return candidates[0][1]  # повертаємо об'єкт SceneObject
 
 def cursor_on_gizmo(scene, mouse_x, mouse_y):
     import math
