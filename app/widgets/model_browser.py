@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QListWidget, QPushButton, QHBoxLayout, QMessageBox
 from PyQt6.QtCore import Qt
+from ..scene3d.uav import UAV
 
 class ModelBrowser(QWidget):
     """Панель для вибору / додавання моделей у сцену."""
@@ -33,9 +34,31 @@ class ModelBrowser(QWidget):
     # ------------------------------------------------------------------
     def refresh_list(self):
         """Оновити список моделей з поточної сцени."""
+        self.list.blockSignals(True)
         self.list.clear()
         for obj in self.scene3d.objects:
             self.list.addItem(obj.name)
+        self.list.blockSignals(False)
+
+        # --- Перевірка наявності UAV ---
+        has_uav = any(isinstance(obj, UAV) for obj in self.scene3d.objects)
+
+        if has_uav:
+            self.btn_add_uav.setEnabled(False)
+            self.btn_add_uav.setStyleSheet("""
+                QPushButton {
+                    color: gray;
+                    background-color: #2b2b2b;
+                    border: 1px solid #555;
+                }
+            """)  # робимо кнопку сірою
+            self.btn_add_uav.setToolTip("UAV вже існує у сцені — не можна створити другий.")
+        else:
+            self.btn_add_uav.setEnabled(True)
+            self.btn_add_uav.setStyleSheet("")  # повертаємо стандартний стиль
+            self.btn_add_uav.setToolTip("Додати безпілотник (UAV) до сцени.")
+
+
 
     # ------------------------------------------------------------------
     def on_model_selected(self, name):
@@ -53,7 +76,10 @@ class ModelBrowser(QWidget):
 
     # ------------------------------------------------------------------
     def add_model(self, model_type: str):
-        """Додає нову модель у сцену та оновлює список."""
+        """Додає нову модель до сцени."""
+        if model_type == "UAV" and any(isinstance(o, UAV) for o in self.objects):
+            print("[Scene3D] ⚠️ Неможливо створити другий UAV — уже існує.")
+            return None
         model = self.scene3d.add_model(model_type)
         if model:
             self.refresh_list()
