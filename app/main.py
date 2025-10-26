@@ -4,6 +4,9 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import torch
+from ml.ml_system import MLSystem
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
     QTabWidget, QSplitter, QMenuBar, QStatusBar, QFileDialog, QMessageBox
@@ -18,7 +21,7 @@ from app.widgets.simulation_panel import SimulationPanel
 from app.scene3d.scene3d import Scene3D
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, ml_system=None):
         super().__init__()
         self.setWindowTitle("ISPPR-BPLA")
         self.resize(1280, 720)
@@ -68,6 +71,18 @@ class MainWindow(QMainWindow):
         # TODO: підключити сигнали з кнопок симуляції до функцій (start, pause, step)
         # self.sim_panel.start_clicked.connect(self.start_simulation)
         # self.sim_panel.stop_clicked.connect(self.stop_simulation)
+
+        # === Ініціалізація AI ===
+        if ml_system is not None:
+            self.ml_system = ml_system
+        else:
+            from ml.ml_system import MLSystem
+            self.ml_system = MLSystem(log_func=self.console.log)
+
+        # Тест
+        features = [30, 25, 10, 20, 400, 100, 110]
+        risk = self.ml_system.predict(features)
+        self.console.log(f"Collision risk: {risk:.2f}")
 
     def _create_menu(self):
         menubar = QMenuBar()
@@ -136,8 +151,16 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
+    # === Ініціалізація AI ===
+    ml_system = MLSystem()
+
+    #ТЕСТ Приклад використання:
+    features = [30, 25, 10, 20, 400, 100, 110]
+    risk = ml_system.predict(features)
+    print(f"Collision risk: {risk:.2f}")
+
     app = QApplication(sys.argv)
     app.setStyleSheet(open("app/style.qss", encoding="utf-8").read())
-    window = MainWindow()
+    window = MainWindow(ml_system=ml_system)
     window.show()
     sys.exit(app.exec())

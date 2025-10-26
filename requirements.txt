@@ -1,10 +1,21 @@
+# === Core ML / AI ===
+# CPU-only версия (по умолчанию):
+torch
+torchvision
+
+# Если есть GPU (CUDA 12.8), устанавливай вручную:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+
+# UI + 3D
 PyQt6
 PyOpenGL
 PyOpenGL_accelerate
-numpy
-scipy
-tensorflow
-scikit-learn
-matplotlib
 trimesh
 pygltflib
+
+# Наука та аналітика
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
