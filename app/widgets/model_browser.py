@@ -1,9 +1,13 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QListWidget, QPushButton, QHBoxLayout, QMessageBox
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from ..scene3d.uav import UAV
 
 class ModelBrowser(QWidget):
     """Панель для вибору / додавання моделей у сцену."""
+
+    # 🟩 Сигнал, який передає вибрану модель або None
+    selection_changed = pyqtSignal(object)
+
     def __init__(self, scene3d, parent=None):
         super().__init__(parent)
         self.scene3d = scene3d
@@ -25,7 +29,6 @@ class ModelBrowser(QWidget):
         self.btn_delete.setEnabled(False)
         self.btn_delete.setStyleSheet("color: gray;")
         layout.addWidget(self.btn_delete)
-
 
         layout.addStretch()
 
@@ -58,14 +61,12 @@ class ModelBrowser(QWidget):
                     background-color: #2b2b2b;
                     border: 1px solid #555;
                 }
-            """)  # робимо кнопку сірою
+            """)
             self.btn_add_uav.setToolTip("UAV вже існує у сцені — не можна створити другий.")
         else:
             self.btn_add_uav.setEnabled(True)
-            self.btn_add_uav.setStyleSheet("")  # повертаємо стандартний стиль
+            self.btn_add_uav.setStyleSheet("")
             self.btn_add_uav.setToolTip("Додати безпілотник (UAV) до сцени.")
-
-
 
     # ------------------------------------------------------------------
     def on_model_selected(self, name):
@@ -73,22 +74,26 @@ class ModelBrowser(QWidget):
         if not name:
             self.btn_delete.setEnabled(False)
             self.btn_delete.setStyleSheet("color: gray;")
+            # 🟩 Передаємо None, якщо нічого не вибрано
+            self.selection_changed.emit(None)
             return
 
         found = False
         for obj in self.scene3d.objects:
             if obj.name == name:
                 self.scene3d.select_model(obj)
+                # 🟩 Еміт сигнал вибраної моделі
+                self.selection_changed.emit(obj)
                 found = True
                 break
 
         if found:
             self.btn_delete.setEnabled(True)
-            self.btn_delete.setStyleSheet("color: #ff5555;")  # червоний текст
+            self.btn_delete.setStyleSheet("color: #ff5555;")
             self.btn_delete.setToolTip("Видалити вибрану модель із сцени")
         else:
             QMessageBox.warning(self, "Помилка", f"Модель '{name}' не знайдена у сцені.")
-
+            self.selection_changed.emit(None)
 
     # ------------------------------------------------------------------
     def add_model(self, model_type: str):
@@ -96,13 +101,18 @@ class ModelBrowser(QWidget):
         if model_type == "UAV" and any(isinstance(o, UAV) for o in self.scene3d.objects):
             print("[Scene3D] ⚠️ Неможливо створити другий UAV — уже існує.")
             return None
+
         model = self.scene3d.add_model(model_type)
         if model:
             self.refresh_list()
+
             # знайти елемент за текстом
             items = self.list.findItems(model.name, Qt.MatchFlag.MatchExactly)
             if items:
                 self.list.setCurrentItem(items[0])
+                # 🟩 Вибрали й емітимо сигнал
+                self.selection_changed.emit(model)
+        return model
 
     # ------------------------------------------------------------------
     def delete_selected_model(self):
@@ -112,7 +122,6 @@ class ModelBrowser(QWidget):
             QMessageBox.warning(self, "Помилка", "Не вибрано жодної моделі.")
             return
 
-        # Пошук моделі у сцені
         for obj in self.scene3d.objects:
             if obj.name == selected_name:
                 self.scene3d.objects.remove(obj)
@@ -121,9 +130,8 @@ class ModelBrowser(QWidget):
                 self.scene3d.update()
                 break
 
-        # Оновлюємо список і кнопки
+        # 🟩 Оновлення списку й сигнал
         self.refresh_list()
         self.btn_delete.setEnabled(False)
         self.btn_delete.setStyleSheet("color: gray;")
-
-
+        self.selection_changed.emit(None)

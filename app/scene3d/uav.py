@@ -3,8 +3,8 @@ from OpenGL.GL import *
 from .draw_utils import draw_ring, draw_outline, draw_axis_gizmo
 
 class UAV(BaseModel3D):
-    def __init__(self, name, mesh, position, rotation, scale=1.0, forward_vector=(0,0,1)):
-        super().__init__(name, mesh, position, rotation, scale, forward_vector)
+    def __init__(self, name, mesh, position, rotation, speed=0.0, altitude=0.0, scale=1.0, forward_vector=(0,0,1)):
+        super().__init__(name, mesh, position, rotation, speed, altitude, scale, forward_vector)
         self.type = "UAV"
         self.safe_zones = {
             "red": 40,

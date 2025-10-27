@@ -47,10 +47,13 @@ class MainWindow(QMainWindow):
         # Ліва панель з вкладками
         left_tabs = QTabWidget()
         self.model_browser = ModelBrowser(self.scene3d)
+        self.properties_panel = PropertiesPanel()
         left_tabs.addTab(self.model_browser, "Моделі")
-        left_tabs.addTab(PropertiesPanel(), "Параметри")
+        left_tabs.addTab(self.properties_panel, "Параметри")
         left_tabs.addTab(TemplatesPanel(), "Шаблони")
         splitter.addWidget(left_tabs)
+
+        self.model_browser.selection_changed.connect(self.properties_panel.set_model)
 
         # Панель управління симуляцією (справа)
         self.sim_panel = SimulationPanel()
