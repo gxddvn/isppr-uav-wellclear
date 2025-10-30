@@ -143,3 +143,41 @@ def draw_ring(position, outer_radius=100.0, inner_radius=None, color=(0.2, 0.8, 
     glDisable(GL_BLEND)
     glEnable(GL_LIGHTING)
     glPopMatrix()
+
+def draw_cube(self, size=1.0):
+    hs = size / 2.0  # половина розміру
+    glBegin(GL_QUADS)
+
+    # front
+    glVertex3f(-hs, -hs, hs)
+    glVertex3f(hs, -hs, hs)
+    glVertex3f(hs, hs, hs)
+    glVertex3f(-hs, hs, hs)
+    # back
+    glVertex3f(-hs, -hs, -hs)
+    glVertex3f(-hs, hs, -hs)
+    glVertex3f(hs, hs, -hs)
+    glVertex3f(hs, -hs, -hs)
+    # left
+    glVertex3f(-hs, -hs, -hs)
+    glVertex3f(-hs, -hs, hs)
+    glVertex3f(-hs, hs, hs)
+    glVertex3f(-hs, hs, -hs)
+    # right
+    glVertex3f(hs, -hs, -hs)
+    glVertex3f(hs, hs, -hs)
+    glVertex3f(hs, hs, hs)
+    glVertex3f(hs, -hs, hs)
+    # top
+    glVertex3f(-hs, hs, -hs)
+    glVertex3f(-hs, hs, hs)
+    glVertex3f(hs, hs, hs)
+    glVertex3f(hs, hs, -hs)
+    # bottom
+    glVertex3f(-hs, -hs, -hs)
+    glVertex3f(hs, -hs, -hs)
+    glVertex3f(hs, -hs, hs)
+    glVertex3f(-hs, -hs, hs)
+
+    glEnd()
+

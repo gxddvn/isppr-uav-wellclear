@@ -55,6 +55,9 @@ class MainWindow(QMainWindow):
 
         self.model_browser.selection_changed.connect(self.properties_panel.set_model)
 
+        # додаємо зв'язок для оновлення висоти моделі
+        self.properties_panel.model_updated.connect(self.on_model_updated)
+
         # Панель управління симуляцією (справа)
         self.sim_panel = SimulationPanel()
         splitter.addWidget(self.sim_panel)
@@ -78,6 +81,8 @@ class MainWindow(QMainWindow):
         self.sim_panel.pause_clicked.connect(self.scene3d.pause_simulation)
         self.sim_panel.stop_clicked.connect(self.scene3d.stop_simulation)
 
+        self.sim_panel.min_altitude_changed.connect(self.scene3d.set_min_altitude)
+
         # регулювання швидкості
         self.sim_panel.speed_changed.connect(self.on_speed_changed)
 
@@ -96,6 +101,11 @@ class MainWindow(QMainWindow):
     def on_speed_changed(self, speed_factor: float):
         self.scene3d.sim_speed = speed_factor
         self.console.log(f"[Simulation] 🔧 Швидкість ×{speed_factor:.1f}")
+
+    def on_model_updated(self, model):
+        # Оновлюємо позицію моделі на сцені
+        model.position[1] = model.altitude  # висота
+        self.scene3d.update()  # перемалювати сцену
 
     def _create_menu(self):
         menubar = QMenuBar()

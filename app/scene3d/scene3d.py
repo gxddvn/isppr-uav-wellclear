@@ -6,7 +6,7 @@ from OpenGL.GLU import *
 from PyQt6.QtWidgets import QMessageBox
 
 from .camera import apply_camera, set_projection
-from .draw_utils import draw_grid, draw_outline, draw_axis_gizmo, draw_trajectory, create_display_list
+from .draw_utils import draw_grid, draw_outline, draw_axis_gizmo, draw_trajectory, create_display_list, draw_cube
 from .model_loader import load_gltf_model
 from .mouse_events import SceneMouseHandler
 from .base_model import BaseModel3D
@@ -26,6 +26,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.camera_pitch = 25.0
         self.rotate_sensitivity = 0.5
         self.initial_states = {}
+        self.min_altitude = 0.0
 
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         try:
@@ -70,6 +71,9 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         glLightfv(GL_LIGHT0, GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
 
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        
         for obj in self.objects:
             if obj.mesh:
                 obj.display_list = create_display_list(obj.mesh)
@@ -84,13 +88,37 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         draw_grid()
 
+        # --- Червона зона обмеження ---
+        self.draw_min_altitude_zone()
+
         for obj in self.objects:
             obj.draw(selected=(self.selected == obj))
 
         # --- Траєкторії для UAV та Obstacle ---
         for obj in self.objects:
             obj.draw_trajectory()
-    
+
+    def draw_min_altitude_zone(self):
+        """Малює червону прозору зону, нижче якої політ заборонений."""
+        if self.min_altitude <= 0:
+            return
+
+        scene_size = 1000.0
+        height = self.min_altitude
+
+        glDisable(GL_LIGHTING)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        glColor4f(1.0, 0.0, 0.0, 0.25)
+        glPushMatrix()
+        glTranslatef(0.0, height / 2.0, 0.0)
+        glScalef(scene_size, height, scene_size)
+        draw_cube(1.0)  # імпортований з draw_utils
+        glPopMatrix()
+
+        glEnable(GL_LIGHTING)
+
     def add_model(self, model_type: str):
         """Додає нову модель до сцени."""
         if model_type == "UAV":
@@ -122,6 +150,15 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         if not self.can_start_simulation():
             QMessageBox.warning(self, "Помилка", "Не всі моделі мають швидкість і висоту!")
             return
+
+        for obj in self.objects:
+            print(f"obj.name: {obj.name}")
+            print(f"obj.position[1]: {obj.position[1]}")
+            print(f"obj.altitude: {obj.altitude}")
+            print(f"self.min_altitude: {self.min_altitude}")
+            if obj.position[1] < self.min_altitude:
+                QMessageBox.warning(self, "Помилка", f"Модель {obj.name} знаходиться нижче мінімальної висоти {self.min_altitude} м!")
+                return
         self.is_simulating = True
         self.timer.start(50)  # оновлення кожні 50 мс (~20 FPS)
         print("[Simulation] ▶ Запущено")
@@ -141,6 +178,11 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                 obj.rotation = rot.copy()
         self.update()
         print("[Simulation] ⏹ Зупинено")
+
+    def set_min_altitude(self, value: float):
+        """Задає мінімальну висоту польоту і оновлює сцену."""
+        self.min_altitude = value
+        self.update()  # щоб червона зона перемальовувалась у реальному часі
 
 
     def can_start_simulation(self):
@@ -176,7 +218,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         fx, fy, fz = self.get_movement_vector(obj)
 
         obj.position[0] += fx * speed_ms
-        obj.position[1] = obj.altitude
+
+        new_y = obj.altitude
+        if new_y < self.min_altitude:
+            new_y = self.min_altitude
+        obj.position[1] = new_y
+
         obj.position[2] += fz * speed_ms
 
     def apply_model_altitudes(self):
