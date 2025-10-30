@@ -2,15 +2,16 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSlider
 from PyQt6.QtCore import Qt, pyqtSignal
 
 class SimulationPanel(QWidget):
-    """Панель керування симуляцією."""
     start_clicked = pyqtSignal()
     stop_clicked = pyqtSignal()
     pause_clicked = pyqtSignal()
+    speed_changed = pyqtSignal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Керування симуляцією"))
+
         self.btn_start = QPushButton("▶ Старт")
         self.btn_pause = QPushButton("⏸ Пауза")
         self.btn_stop = QPushButton("⏹ Стоп")
@@ -25,7 +26,10 @@ class SimulationPanel(QWidget):
         layout.addWidget(self.speed_slider)
         layout.addStretch()
 
-        # сигнали
-        self.btn_start.clicked.connect(self.start_clicked)
-        self.btn_pause.clicked.connect(self.pause_clicked)
-        self.btn_stop.clicked.connect(self.stop_clicked)
+        # 🔹 Виклики сигналів
+        self.btn_start.clicked.connect(lambda: self.start_clicked.emit())
+        self.btn_pause.clicked.connect(lambda: self.pause_clicked.emit())
+        self.btn_stop.clicked.connect(lambda: self.stop_clicked.emit())
+        self.speed_slider.valueChanged.connect(
+            lambda val: self.speed_changed.emit(val / 5.0)
+        )

@@ -1,4 +1,3 @@
-# app/widgets/properties_panel.py
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFormLayout, QLineEdit, QPushButton
 from PyQt6.QtCore import pyqtSignal, QTimer
 

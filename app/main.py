@@ -70,10 +70,16 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Готово")
         self.model_browser.refresh_list()
+        self.sim_panel.start_clicked.connect(lambda: self.status_bar.showMessage("Симуляцію запущено"))
+        self.sim_panel.pause_clicked.connect(lambda: self.status_bar.showMessage("Симуляцію призупинено"))
+        self.sim_panel.stop_clicked.connect(lambda: self.status_bar.showMessage("Симуляцію зупинено"))
 
-        # TODO: підключити сигнали з кнопок симуляції до функцій (start, pause, step)
-        # self.sim_panel.start_clicked.connect(self.start_simulation)
-        # self.sim_panel.stop_clicked.connect(self.stop_simulation)
+        self.sim_panel.start_clicked.connect(self.scene3d.start_simulation)
+        self.sim_panel.pause_clicked.connect(self.scene3d.pause_simulation)
+        self.sim_panel.stop_clicked.connect(self.scene3d.stop_simulation)
+
+        # регулювання швидкості
+        self.sim_panel.speed_changed.connect(self.on_speed_changed)
 
         # === Ініціалізація AI ===
         if ml_system is not None:
@@ -86,6 +92,10 @@ class MainWindow(QMainWindow):
         features = [30, 25, 10, 20, 400, 100, 110]
         risk = self.ml_system.predict(features)
         self.console.log(f"Collision risk: {risk:.2f}")
+
+    def on_speed_changed(self, speed_factor: float):
+        self.scene3d.sim_speed = speed_factor
+        self.console.log(f"[Simulation] 🔧 Швидкість ×{speed_factor:.1f}")
 
     def _create_menu(self):
         menubar = QMenuBar()

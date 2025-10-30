@@ -87,6 +87,8 @@ class SceneMouseHandler:
             Qt.MouseButton.MiddleButton,
             Qt.MouseButton.RightButton,
         ]:
+            if self.selected and (getattr(self, "is_dragging_model", False) or getattr(self, "is_rotating_model", False)):
+                self.update_initial_state(self.selected)
             self.is_dragging_model = False
             self.is_rotating_model = False
             self.is_rotating_camera = False

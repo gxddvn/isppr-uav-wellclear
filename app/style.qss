@@ -28,3 +28,15 @@ QTextEdit {
 QLabel {
     color: white;
 }
+
+/* === QMessageBox Global Style === */
+QMessageBox {
+    background-color: #1E1E1E;
+    border: 1px solid #3C3C3C;
+    color: #FFFFFF;
+}
+
+QMessageBox QLabel {
+    color: #FFFFFF;
+    font-size: 14px;
+}
