@@ -39,9 +39,34 @@ class MainWindow(QMainWindow):
         # === Верхня частина: сцена + панелі ===
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, stretch=10)
+
+        # === Нижня частина: консоль ===
+        self.console = ConsolePanel()
+        main_layout.addWidget(self.console, stretch=2)
+
+        # === Ініціалізація AI ===
+        if ml_system is not None:
+            self.ml_system = ml_system
+        else:
+            from ml.ml_system import MLSystem
+            self.ml_system = MLSystem(log_func=self.console.log)
+
+        #ТЕСТ Приклад використання:
+        v1, v2, heading1, heading2, distance, alt1, alt2 = 30, 25, 10, 20, 400, 100, 110
+
+        # Вычисляем новые признаки
+        alt_diff = alt1 - alt2
+        heading_diff = (heading1 - heading2 + 180) % 360 - 180  # разница в диапазоне [-180, 180]
+        speed_diff = v1 - v2
+
+        # Полный список признаков для модели
+        features = [v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff]
+
+        risk = ml_system.predict(features)
+        print(f"Collision risk: {risk:.2f}")
         
         # Сцена (центр)
-        self.scene3d = Scene3D(self)
+        self.scene3d = Scene3D(self, ml_system=self.ml_system)
         splitter.addWidget(self.scene3d)
         
         # Ліва панель з вкладками
@@ -64,10 +89,6 @@ class MainWindow(QMainWindow):
 
         splitter.setSizes([250, 900, 250])
 
-        # === Нижня частина: консоль ===
-        self.console = ConsolePanel()
-        main_layout.addWidget(self.console, stretch=2)
-
         # === Статусбар ===
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
@@ -85,18 +106,6 @@ class MainWindow(QMainWindow):
 
         # регулювання швидкості
         self.sim_panel.speed_changed.connect(self.on_speed_changed)
-
-        # === Ініціалізація AI ===
-        if ml_system is not None:
-            self.ml_system = ml_system
-        else:
-            from ml.ml_system import MLSystem
-            self.ml_system = MLSystem(log_func=self.console.log)
-
-        # Тест
-        features = [30, 25, 10, 20, 400, 100, 110]
-        risk = self.ml_system.predict(features)
-        self.console.log(f"Collision risk: {risk:.2f}")
 
     def on_speed_changed(self, speed_factor: float):
         self.scene3d.sim_speed = speed_factor
@@ -178,7 +187,16 @@ if __name__ == "__main__":
     ml_system = MLSystem()
 
     #ТЕСТ Приклад використання:
-    features = [30, 25, 10, 20, 400, 100, 110]
+    v1, v2, heading1, heading2, distance, alt1, alt2 = 30, 25, 10, 20, 400, 100, 110
+
+    # Вычисляем новые признаки
+    alt_diff = alt1 - alt2
+    heading_diff = (heading1 - heading2 + 180) % 360 - 180  # разница в диапазоне [-180, 180]
+    speed_diff = v1 - v2
+
+    # Полный список признаков для модели
+    features = [v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff]
+
     risk = ml_system.predict(features)
     print(f"Collision risk: {risk:.2f}")
 

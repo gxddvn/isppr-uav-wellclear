@@ -2,35 +2,76 @@ import numpy as np
 import pandas as pd
 import os
 
-def generate_synthetic_dataset(num_samples=5000, output_dir="../ml/datasets/synthetic"):
+def generate_synthetic_dataset(
+    num_samples=10000,
+    danger_ratio=0.3,  # Доля опасных сценариев
+    output_dir="../ml/datasets/synthetic"
+):
     os.makedirs(output_dir, exist_ok=True)
 
     data = []
-    for _ in range(num_samples):
-        # Випадкові швидкості (м/с)
+    num_danger = int(num_samples * danger_ratio)
+    num_safe = num_samples - num_danger
+
+    # --- Безопасные сценарии ---
+    for _ in range(num_safe):
         v1 = np.random.uniform(5, 50)
         v2 = np.random.uniform(5, 50)
-
-        # Випадкові курси (градуси)
         heading1 = np.random.uniform(0, 360)
         heading2 = np.random.uniform(0, 360)
-
-        # Початкові відстані (м)
-        dist = np.random.uniform(100, 5000)
-
-        # Висоти (м)
+        distance = np.random.uniform(500, 5000)
         alt1 = np.random.uniform(0, 500)
         alt2 = np.random.uniform(0, 500)
 
-        # Обчислимо "загрозу" — умовно, якщо різниця курсів < 30° і відстань < 500 → collision risk
-        collision_risk = int(abs(heading1 - heading2) < 30 and dist < 500 and abs(alt1 - alt2) < 50)
+        # Новые признаки
+        alt_diff = alt1 - alt2
+        heading_diff = (heading1 - heading2 + 180) % 360 - 180  # разница курсов в [-180, 180]
+        speed_diff = v1 - v2
 
-        data.append([v1, v2, heading1, heading2, dist, alt1, alt2, collision_risk])
+        # Риск: чем больше расстояние и разница высот/курсов, тем ниже
+        collision_risk = np.clip(
+            0.2 * (1 - distance/5000) + 
+            0.3 * (1 - abs(heading_diff)/180) + 
+            0.3 * (1 - abs(alt_diff)/500), 
+            0, 0.3
+        )
 
-    df = pd.DataFrame(data, columns=["v1", "v2", "heading1", "heading2", "distance", "alt1", "alt2", "collision_risk"])
+        data.append([v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff, collision_risk])
+
+    # --- Опасные сценарии ---
+    for _ in range(num_danger):
+        v1 = np.random.uniform(5, 50)
+        v2 = np.random.uniform(5, 50)
+        heading1 = np.random.uniform(0, 360)
+        heading2 = (heading1 + np.random.uniform(-30, 30)) % 360
+        distance = np.random.uniform(50, 300)
+        alt1 = np.random.uniform(0, 500)
+        alt2 = alt1 + np.random.uniform(-20, 20)
+
+        # Новые признаки
+        alt_diff = alt1 - alt2
+        heading_diff = (heading1 - heading2 + 180) % 360 - 180
+        speed_diff = v1 - v2
+
+        collision_risk = np.clip(
+            0.5 + 0.5*(1 - distance/300) + 
+            0.2*(1 - abs(heading_diff)/30) + 
+            0.2*(1 - abs(alt_diff)/20), 
+            0, 1
+        )
+
+        data.append([v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff, collision_risk])
+
+    df = pd.DataFrame(data, columns=[
+        "v1", "v2", "heading1", "heading2", "distance", 
+        "alt1", "alt2", "alt_diff", "heading_diff", "speed_diff", 
+        "collision_risk"
+    ])
+
     output_path = os.path.join(output_dir, "synthetic_dataset.csv")
     df.to_csv(output_path, index=False)
     print(f"✅ Generated {num_samples} samples → {output_path}")
+
     return df
 
 if __name__ == "__main__":

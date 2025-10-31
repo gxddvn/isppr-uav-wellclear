@@ -12,13 +12,19 @@ from .mouse_events import SceneMouseHandler
 from .base_model import BaseModel3D
 from .uav import UAV
 from .obstacle import Obstacle
+from core.risk_model import compute_distance, compute_alt_diff, compute_heading_diff, wald, hurwicz, laplace, savage, compute_collaborative_risk
 import math
+import numpy as np
+import copy
+
 
 class Scene3D(QOpenGLWidget, SceneMouseHandler):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, ml_system=None):
         super().__init__(parent)
         self.setMinimumSize(800, 600)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        self.ml_system = ml_system
 
         # Камера
         self.camera_distance = 400.0
@@ -191,14 +197,84 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             if obj.speed <= 0 or obj.altitude <= 0:
                 return False
         return True
+    
+    def handle_warning_zone(self, uav, obs):
+        """
+        Генерує варіанти обходу для оператора (але не застосовує).
+        """
+        return [
+            {"name": "Підйом", "altitude": uav.altitude + 5},
+            {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5)},
+            {"name": "Вліво", "move_vector": [-1, 0, 0]},
+            {"name": "Вправо", "move_vector": [1, 0, 0]},
+        ]
+
+    def handle_danger_zone(self, uav, obstacles):
+        """
+        Дрон сам вибирає найкращий маневр з точки зору ризику.
+        """
+        candidate_moves = [
+            {"name": "Підйом", "altitude": uav.altitude + 5, "move_vector": uav.move_vector},
+            {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5), "move_vector": uav.move_vector},
+            {"name": "Вліво", "altitude": uav.altitude, "move_vector": [-1, 0, 0]},
+            {"name": "Вправо", "altitude": uav.altitude, "move_vector": [1, 0, 0]},
+            {"name": "Назад", "altitude": uav.altitude, "move_vector": [0, 0, -1]},
+        ]
+
+        best_move = None
+        best_risk = float('inf')
+
+        for move in candidate_moves:
+            temp_uav = copy.deepcopy(uav)
+            temp_uav.altitude = move["altitude"]
+            temp_uav.move_vector = move["move_vector"]
+
+            avg_risk = compute_collaborative_risk(temp_uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+
+            if avg_risk < best_risk:
+                best_risk = avg_risk
+                best_move = move
+
+        if best_move:
+            uav.altitude = best_move["altitude"]
+            uav.move_vector = best_move["move_vector"]
+            print(f"✅ UAV #{uav.name}: Виконує маневр '{best_move['name']}' (ризик={best_risk:.2f})")
+
 
     def update_simulation_step(self):
-        """Оновлення позицій об’єктів у часі"""
+        print("[STEP] === Tick start ===")
+
+        if self.ml_system is None:
+            print("[STEP] ❌ ML System не передана — выход")
+            return
+
+        uav = next((o for o in self.objects if isinstance(o, UAV)), None)
+        obstacles = [o for o in self.objects if isinstance(o, Obstacle)]
+        if not uav:
+            print("[STEP] ❌ UAV не найден — выход")
+            return
+
+        print(f"[STEP] ✅ UAV найден: {uav.name}, obstacles: {len(obstacles)}")
+
+        risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude) + 0.5
+        print(f"[STEP] 🧠 Collaborative Risk={risk:.2f}")
+
+        if risk < 0.3:
+            pass
+        elif risk < 0.7:
+            for obs in obstacles:
+                self.handle_warning_zone(uav, obs)
+        else:
+            self.handle_danger_zone(uav, obstacles)
+
         for obj in self.objects:
             if isinstance(obj, (UAV, Obstacle)):
                 self.move_model(obj)
+                print(f"[STEP] 🔹 Об’єкт '{obj.name}' updated: pos={obj.position}, rot={obj.rotation}")
+
         self.update()
-    
+        print("[STEP] ✅ Кадр оновлено\n")
+
     def get_movement_vector(self, obj):
         """
         Переводим локальный move_vector в мировую систему
@@ -216,15 +292,11 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def move_model(self, obj):
         speed_ms = (obj.speed / 3.6) * 0.05 * self.sim_speed
         fx, fy, fz = self.get_movement_vector(obj)
-
         obj.position[0] += fx * speed_ms
-
-        new_y = obj.altitude
-        if new_y < self.min_altitude:
-            new_y = self.min_altitude
-        obj.position[1] = new_y
-
         obj.position[2] += fz * speed_ms
+        new_y = max(obj.altitude, self.min_altitude)
+        obj.position[1] = new_y
+        print(f"[MOVE] {obj.name}: Δx={fx*speed_ms:.2f}, Δz={fz*speed_ms:.2f}, pos={obj.position}")
 
     def apply_model_altitudes(self):
         """Оновлює висоту моделей відповідно до параметрів altitude."""

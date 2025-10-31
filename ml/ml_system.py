@@ -8,7 +8,7 @@ from ml.models import CollisionModel
 from core.data_generator import generate_synthetic_dataset
 
 MODEL_PATH = "./ml/models/collision_model_weights.pt"
-INPUT_DIM = 7
+INPUT_DIM = 10
 
 class MLSystem:
     def __init__(self, dataset_dir="./ml/datasets/synthetic", model_dir="./ml/models", log_func=print):
