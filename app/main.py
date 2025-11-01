@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(left_tabs)
 
         self.model_browser.selection_changed.connect(self.properties_panel.set_model)
+        self.properties_panel.model_updated.connect(self.scene3d.update_initial_state)
 
         # додаємо зв'язок для оновлення висоти моделі
         self.properties_panel.model_updated.connect(self.on_model_updated)

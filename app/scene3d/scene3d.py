@@ -149,8 +149,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.update()
 
     def update_initial_state(self, obj: BaseModel3D):
-        """Оновлює початкову позицію та поворот моделі після drag/rotate."""
+        """Оновлює початкову позицію та поворот моделі після змін."""
+        # 🔹 Синхронізуємо позицію з висотою перед збереженням
+        obj.position[1] = obj.altitude
         self.initial_states[obj.name] = (obj.position.copy(), obj.rotation.copy())
+        print(f"[STATE] updated initial state for {obj.name}: pos={obj.position}, alt={obj.altitude}")
+
 
     def start_simulation(self):
         if not self.can_start_simulation():
@@ -211,7 +215,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
     def handle_danger_zone(self, uav, obstacles):
         """
-        Дрон сам вибирає найкращий маневр з точки зору ризику.
+        Дрон вибирає маневр з урахуванням мінімальної висоти та розміру перешкод.
         """
         candidate_moves = [
             {"name": "Підйом", "altitude": uav.altitude + 5, "move_vector": uav.move_vector},
@@ -229,16 +233,26 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             temp_uav.altitude = move["altitude"]
             temp_uav.move_vector = move["move_vector"]
 
-            avg_risk = compute_collaborative_risk(temp_uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+            base_risk = compute_collaborative_risk(temp_uav, obstacles, self.ml_system,
+                                                gamma=2.0, min_altitude=self.min_altitude)
 
-            if avg_risk < best_risk:
-                best_risk = avg_risk
+            # --- Додаємо штраф за спуск нижче безпечного рівня ---
+            altitude_margin = move["altitude"] - self.min_altitude
+            if altitude_margin < 10:  # менше ніж 10 м над мінімумом
+                base_risk += (10 - altitude_margin) * 0.05  # штраф зростає чим ближче до землі
+
+            # --- Додаємо легкий штраф за дуже високий підйом ---
+            if move["altitude"] - uav.altitude > 15:
+                base_risk += 0.1  # щоб не підіймався надмірно
+
+            if base_risk < best_risk:
+                best_risk = base_risk
                 best_move = move
 
         if best_move:
             uav.altitude = best_move["altitude"]
             uav.move_vector = best_move["move_vector"]
-            print(f"✅ UAV #{uav.name}: Виконує маневр '{best_move['name']}' (ризик={best_risk:.2f})")
+            print(f"✅ UAV {uav.name}: маневр '{best_move['name']}' (ризик={best_risk:.2f})")
 
 
     def update_simulation_step(self):
