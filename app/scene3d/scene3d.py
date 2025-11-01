@@ -19,12 +19,13 @@ import copy
 
 
 class Scene3D(QOpenGLWidget, SceneMouseHandler):
-    def __init__(self, parent=None, ml_system=None):
+    def __init__(self, parent=None, ml_system=None, log_func=print):
         super().__init__(parent)
         self.setMinimumSize(800, 600)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.ml_system = ml_system
+        self.log_func = log_func
 
         # Камера
         self.camera_distance = 400.0
@@ -63,6 +64,19 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.timer.timeout.connect(self.update_simulation_step)
         self.sim_speed = 1.0  # множник швидкості
         self.apply_model_altitudes()
+
+    def generate_unique_name(self, base_name: str) -> str:
+        """
+        Генерує унікальне ім'я для нового об'єкта.
+        Наприклад: UAV #1, UAV #2, Obstacle #1, Obstacle #2.
+        """
+        existing_names = {obj.name for obj in self.objects}
+        counter = 1
+        name = f"{base_name} #{counter}"
+        while name in existing_names:
+            counter += 1
+            name = f"{base_name} #{counter}"
+        return name
 
     def initializeGL(self):
         glClearColor(0.1, 0.1, 0.12, 1.0)
@@ -129,10 +143,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         """Додає нову модель до сцени."""
         if model_type == "UAV":
             mesh = self.mesh_uav
-            model = UAV(f"UAV #{len([o for o in self.objects if isinstance(o, UAV)]) + 1}", mesh, [0, 0, 0], [0, 0, 0])
+            name = self.generate_unique_name("UAV")
+            model = UAV(name, mesh, [0, 0, 0], [0, 0, 0])
         else:
             mesh = self.mesh_plane
-            model = Obstacle(f"Obstacle #{len([o for o in self.objects if isinstance(o, Obstacle)]) + 1}", mesh, [0, 0, 0], [0, 0, 0])
+            name = self.generate_unique_name("Obstacle")
+            model = Obstacle(name, mesh, [0, 0, 0], [0, 0, 0])
 
         if not mesh:
             print(f"[Scene3D] ❌ Mesh for {model_type} not loaded")
@@ -142,6 +158,84 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.objects.append(model)
         self.update()
         return model
+
+    def get_objects_data(self):
+        """Отримує дані про всі об’єкти на сцені."""
+        data = []
+        for obj in self.objects:
+            data.append({
+                "id": obj.name,
+                "type": obj.__class__.__name__,
+                "position": list(obj.position),
+                "rotation": list(obj.rotation),
+                "altitude": getattr(obj, "altitude", 0),
+                "speed": getattr(obj, "speed", 0),
+                "move_vector": list(getattr(obj, "move_vector", [0,0,0]))
+            })
+        return data
+
+    def load_objects_from_template(self, objects_data):
+        """Очищає сцену та відновлює об’єкти із шаблону."""
+        print("[TEMPLATE] Завантаження шаблону...")
+        self.objects.clear()
+        self.objects = []
+
+        for obj_data in objects_data:
+            model_type = obj_data["type"]
+            name = obj_data["id"]
+            position = obj_data["position"]
+            rotation = obj_data["rotation"]
+
+            altitude = obj_data.get("altitude", position[1])
+            speed = obj_data.get("speed", 0.0)
+            move_vector = obj_data.get("move_vector", [0, 0, 1])
+
+            if model_type == "UAV":
+                mesh = self.mesh_uav
+                obj = UAV(name, mesh, position, rotation)
+            elif model_type == "Obstacle":
+                mesh = self.mesh_plane
+                obj = Obstacle(name, mesh, position, rotation)
+            else:
+                print(f"[TEMPLATE] ⚠️ Невідомий тип: {model_type}")
+                continue
+
+            obj.altitude = altitude
+            obj.speed = speed
+            obj.move_vector = move_vector
+
+            if mesh:
+                obj.display_list = create_display_list(mesh)
+
+            self.objects.append(obj)
+            print(f"[TEMPLATE] ✅ Додано {name}: alt={altitude}, speed={speed}, mv={move_vector}")
+
+        # 🔹 Оновлюємо початковий стан для Stop
+        self.initial_states.clear()
+        for obj in self.objects:
+            self.initial_states[obj.name] = (obj.position.copy(), obj.rotation.copy())
+
+        # Оновлюємо позиції по висотах і перемальовуємо
+        self.apply_model_altitudes()
+        self.update()
+
+        # ✅ Оновлення списку у ModelBrowser
+        if hasattr(self, 'model_browser') and self.model_browser:
+            self.model_browser.refresh_list()
+            if self.model_browser.list.count() > 0:
+                self.model_browser.list.setCurrentRow(0)
+
+        self.refresh_model_list()
+        print("[TEMPLATE] Завантаження завершено.")
+
+    def refresh_model_list(self):
+        """Оновлює список моделей у панелі керування або селекті."""
+        self.model_list = [obj.name for obj in self.objects]  # якщо потрібен список імен
+        # Якщо є UI-селект:
+        if hasattr(self, 'model_select_widget'):
+            self.model_select_widget.clear()
+            self.model_select_widget.addItems(self.model_list)
+        print("[UI] Список моделей оновлено.")
 
     def select_model(self, obj: BaseModel3D):
         """Вибір моделі зі сцени."""
@@ -204,14 +298,24 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
     
     def handle_warning_zone(self, uav, obs):
         """
-        Генерує варіанти обходу для оператора (але не застосовує).
+        Генерує варіанти обходу для оператора і виводить їх у консоль.
         """
-        return [
+        options = [
             {"name": "Підйом", "altitude": uav.altitude + 5},
             {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5)},
             {"name": "Вліво", "move_vector": [-1, 0, 0]},
             {"name": "Вправо", "move_vector": [1, 0, 0]},
         ]
+
+        # Виводимо в консоль
+        self.log_func(f"[WARNING] UAV {uav.name} поруч з перешкодою {obs.name}. Варіанти обходу:")
+        for opt in options:
+            desc = opt.get("name", "не вказано")
+            alt = opt.get("altitude", "—")
+            mv = opt.get("move_vector", "—")
+            self.log_func(f"   ➤ {desc}: altitude={alt}, move_vector={mv}")
+
+        return options
 
     def handle_danger_zone(self, uav, obstacles):
         """

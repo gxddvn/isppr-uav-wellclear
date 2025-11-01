@@ -66,17 +66,19 @@ class MainWindow(QMainWindow):
         print(f"Collision risk: {risk:.2f}")
         
         # Сцена (центр)
-        self.scene3d = Scene3D(self, ml_system=self.ml_system)
+        self.scene3d = Scene3D(self, ml_system=self.ml_system, log_func=self.console.log)
         splitter.addWidget(self.scene3d)
         
         # Ліва панель з вкладками
         left_tabs = QTabWidget()
         self.model_browser = ModelBrowser(self.scene3d)
         self.properties_panel = PropertiesPanel()
+        self.templates_panel = TemplatesPanel(scene3d=self.scene3d)
         left_tabs.addTab(self.model_browser, "Моделі")
         left_tabs.addTab(self.properties_panel, "Параметри")
-        left_tabs.addTab(TemplatesPanel(), "Шаблони")
+        left_tabs.addTab(self.templates_panel, "Шаблони")
         splitter.addWidget(left_tabs)
+        self.scene3d.model_browser = self.model_browser
 
         self.model_browser.selection_changed.connect(self.properties_panel.set_model)
         self.properties_panel.model_updated.connect(self.scene3d.update_initial_state)
@@ -125,14 +127,14 @@ class MainWindow(QMainWindow):
         file_menu = menubar.addMenu("Файл")
 
         action_new = file_menu.addAction("Новий проєкт")
-        action_open = file_menu.addAction("Відкрити...")
-        action_save = file_menu.addAction("Зберегти")
+        # action_open = file_menu.addAction("Відкрити...")
+        # action_save = file_menu.addAction("Зберегти")
         file_menu.addSeparator()
         action_exit = file_menu.addAction("Вихід")
 
         action_new.triggered.connect(self.new_project)
-        action_open.triggered.connect(self.open_project)
-        action_save.triggered.connect(self.save_project)
+        # action_open.triggered.connect(self.open_project)
+        # action_save.triggered.connect(self.save_project)
         action_exit.triggered.connect(self.close)
 
         # === Меню "Вид" ===
@@ -150,9 +152,31 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
     
     def new_project(self):
-        # TODO: очистити сцену, скинути симуляцію
-        self.console.log("[Файл] Створено новий проєкт (заглушка)")
-        self.status_bar.showMessage("Новий проєкт створено")
+        confirm = QMessageBox.question(
+            self,
+            "Новий проєкт",
+            "Ви впевнені, що хочете створити новий проєкт?\n"
+            "Усі поточні моделі та налаштування сцени буде втрачено.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if confirm == QMessageBox.StandardButton.Yes:
+            # 🔹 1. Очистити сцену
+            self.scene3d.objects.clear()
+            self.scene3d.update()
+
+            # 🔹 2. Скинути вибір і властивості
+            self.scene3d.selected = None
+            self.properties_panel.set_model(None)
+
+            # 🔹 3. Оновити список моделей
+            if hasattr(self.model_browser, "refresh_list"):
+                self.model_browser.refresh_list()
+
+            # 🔹 4. Лог і статус
+            self.console.log("[Файл] Створено новий порожній проєкт")
+            self.status_bar.showMessage("Новий проєкт створено")
+
 
     def open_project(self):
         path, _ = QFileDialog.getOpenFileName(self, "Відкрити файл проєкту", "", "JSON Files (*.json);;All Files (*)")
