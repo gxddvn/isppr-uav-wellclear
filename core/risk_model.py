@@ -96,3 +96,25 @@ def savage(payoff_matrix):
     regret_matrix = max_in_columns - payoff_matrix
     max_regret = np.max(regret_matrix, axis=1)
     return np.argmin(max_regret)
+
+def hybrid_decision(payoff_matrix, current_risk):
+    """
+    Гібридний метод вибору рішення:
+    - високий ризик  → Вальда (максимальна безпека)
+    - середній ризик → Гурвіца (баланс)
+    - низький ризик  → Лапласа (нейтрально)
+    """
+
+    if current_risk > 0.7:
+        decision = wald(payoff_matrix)
+        strategy = "Wald (Safe)"
+    elif 0.3 < current_risk <= 0.7:
+        # робимо коефіцієнт α динамічним — чим більший ризик, тим песимістичніше
+        alpha = np.clip(current_risk, 0.4, 0.9)
+        decision = hurwicz(payoff_matrix, alpha=alpha)
+        strategy = f"Hurwicz (α={alpha:.2f})"
+    else:
+        decision = laplace(payoff_matrix)
+        strategy = "Laplace (Neutral)"
+
+    return decision, strategy

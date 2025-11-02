@@ -12,7 +12,7 @@ from .mouse_events import SceneMouseHandler
 from .base_model import BaseModel3D
 from .uav import UAV
 from .obstacle import Obstacle
-from core.risk_model import compute_distance, compute_alt_diff, compute_heading_diff, wald, hurwicz, laplace, savage, compute_collaborative_risk
+from core.risk_model import compute_distance, compute_alt_diff, compute_heading_diff, wald, hurwicz, laplace, savage, compute_collaborative_risk, hybrid_decision
 import math
 import numpy as np
 import copy
@@ -34,6 +34,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.rotate_sensitivity = 0.5
         self.initial_states = {}
         self.min_altitude = 0.0
+        # Мінімальний додатковий запас над min_altitude (щоб не сідати прямо на min)
+        self.min_altitude_margin = 5.0  # м — змінюй при потребі
+
+        # Мінімальний вертикальний буфер від перешкоди (щоб не наближатися в висоті)
+        self.min_vertical_buffer = 5.0  # м — якщо маневр опускає нижче obs.altitude + buffer -> великий штраф
+
 
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         try:
@@ -319,45 +325,53 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
     def handle_danger_zone(self, uav, obstacles):
         """
-        Дрон вибирає маневр з урахуванням мінімальної висоти та розміру перешкод.
+        Дрон вибирає маневр з урахуванням мінімальної висоти та оцінює ризики
+        через гібридний метод (Wald / Hurwicz / Laplace).
         """
         candidate_moves = [
             {"name": "Підйом", "altitude": uav.altitude + 5, "move_vector": uav.move_vector},
-            {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5), "move_vector": uav.move_vector},
+            {"name": "Спуск", "altitude": max(self.min_altitude + 5, uav.altitude - 5), "move_vector": uav.move_vector},
             {"name": "Вліво", "altitude": uav.altitude, "move_vector": [-1, 0, 0]},
             {"name": "Вправо", "altitude": uav.altitude, "move_vector": [1, 0, 0]},
             {"name": "Назад", "altitude": uav.altitude, "move_vector": [0, 0, -1]},
         ]
 
-        best_move = None
-        best_risk = float('inf')
-
-        for move in candidate_moves:
+        # --- Створюємо матрицю ризиків ---
+        payoff_matrix = np.zeros((len(candidate_moves), len(obstacles)))
+        for i, move in enumerate(candidate_moves):
             temp_uav = copy.deepcopy(uav)
             temp_uav.altitude = move["altitude"]
             temp_uav.move_vector = move["move_vector"]
 
-            base_risk = compute_collaborative_risk(temp_uav, obstacles, self.ml_system,
-                                                gamma=2.0, min_altitude=self.min_altitude)
+            for j, obs in enumerate(obstacles):
+                base_risk = compute_collaborative_risk(
+                    temp_uav, [obs], self.ml_system, gamma=2.0, min_altitude=self.min_altitude
+                )
 
-            # --- Додаємо штраф за спуск нижче безпечного рівня ---
-            altitude_margin = move["altitude"] - self.min_altitude
-            if altitude_margin < 10:  # менше ніж 10 м над мінімумом
-                base_risk += (10 - altitude_margin) * 0.05  # штраф зростає чим ближче до землі
+                # 🔹 Штраф за наближення до мінімальної висоти
+                altitude_margin = move["altitude"] - self.min_altitude
+                if altitude_margin < 10:
+                    base_risk += (10 - altitude_margin) * 0.05
 
-            # --- Додаємо легкий штраф за дуже високий підйом ---
-            if move["altitude"] - uav.altitude > 15:
-                base_risk += 0.1  # щоб не підіймався надмірно
+                # 🔹 Легкий штраф за надмірний підйом
+                if move["altitude"] - uav.altitude > 15:
+                    base_risk += 0.1
 
-            if base_risk < best_risk:
-                best_risk = base_risk
-                best_move = move
+                payoff_matrix[i, j] = base_risk
 
-        if best_move:
-            uav.altitude = best_move["altitude"]
-            uav.move_vector = best_move["move_vector"]
-            print(f"✅ UAV {uav.name}: маневр '{best_move['name']}' (ризик={best_risk:.2f})")
+        # --- Обчислюємо поточний ризик ---
+        current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
 
+        # --- Використовуємо гібридний метод ---
+        decision_index, strategy = hybrid_decision(payoff_matrix, current_risk)
+        best_move = candidate_moves[decision_index]
+
+        # --- Застосовуємо вибраний маневр ---
+        uav.altitude = best_move["altitude"]
+        uav.move_vector = best_move["move_vector"]
+
+        print(f"🧭 [DAA] Hybrid strategy: {strategy}")
+        print(f"✅ UAV {uav.name}: маневр '{best_move['name']}' (risk={current_risk:.2f})")
 
     def update_simulation_step(self):
         print("[STEP] === Tick start ===")
