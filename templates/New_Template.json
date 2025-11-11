@@ -1,0 +1,111 @@
+{
+    "name": "New_Template.json",
+    "created_at": "2025-11-02T16:37:50.237144",
+    "objects": [
+        {
+            "id": "UAV #1",
+            "type": "UAV",
+            "position": [
+                130.56000000000003,
+                50.0,
+                -3.071999999999946
+            ],
+            "rotation": [
+                0,
+                -88.70399999999997,
+                0
+            ],
+            "altitude": 50.0,
+            "speed": 120.0,
+            "move_vector": [
+                0,
+                0,
+                1
+            ]
+        },
+        {
+            "id": "Plane #1",
+            "type": "Obstacle",
+            "position": [
+                -24.19199999999995,
+                60.0,
+                -4.224000000000046
+            ],
+            "rotation": [
+                0,
+                172.22399999999996,
+                0
+            ],
+            "altitude": 60.0,
+            "speed": 180.0,
+            "move_vector": [
+                -1,
+                0,
+                0
+            ]
+        },
+        {
+            "id": "Obstacle #1",
+            "type": "Obstacle",
+            "position": [
+                -8.063999999999965,
+                0.0,
+                -64.512
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "altitude": 0.0,
+            "speed": 0.0,
+            "move_vector": [
+                -1,
+                0,
+                0
+            ]
+        },
+        {
+            "id": "Obstacle #2",
+            "type": "Obstacle",
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "altitude": 0.0,
+            "speed": 0.0,
+            "move_vector": [
+                -1,
+                0,
+                0
+            ]
+        },
+        {
+            "id": "Obstacle #3",
+            "type": "Obstacle",
+            "position": [
+                0,
+                0,
+                0
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "altitude": 0.0,
+            "speed": 0.0,
+            "move_vector": [
+                -1,
+                0,
+                0
+            ]
+        }
+    ]
+}

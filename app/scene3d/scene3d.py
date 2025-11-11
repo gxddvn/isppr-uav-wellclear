@@ -325,71 +325,134 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
     def handle_danger_zone(self, uav, obstacles):
         """
-        Дрон вибирає маневр з урахуванням мінімальної висоти та оцінює ризики
-        через гібридний метод (Wald / Hurwicz / Laplace).
+        Обирає безпечний маневр для UAV, з пріоритетом на збільшення вертикального розриву.
+        Якщо існують кандидати, які для ВСІХ перешкод збільшують |vert_diff| -> вибираємо лише серед них.
+        Інакше застосовуємо звичайну оцінку, але з жорсткою пеналізацією за зменшення вертикального розриву.
+        Замість миттєвої зміни висоти задаємо uav.target_altitude (плавне наближення робиться в move_model).
         """
-        candidate_moves = [
-            {"name": "Підйом", "altitude": uav.altitude + 5, "move_vector": uav.move_vector},
-            {"name": "Спуск", "altitude": max(self.min_altitude + 5, uav.altitude - 5), "move_vector": uav.move_vector},
-            {"name": "Вліво", "altitude": uav.altitude, "move_vector": [-1, 0, 0]},
-            {"name": "Вправо", "altitude": uav.altitude, "move_vector": [1, 0, 0]},
-            {"name": "Назад", "altitude": uav.altitude, "move_vector": [0, 0, -1]},
-        ]
+        def _normalize(v):
+            norm = math.sqrt(sum(c * c for c in v))
+            return [c / norm if norm > 0 else 0.0 for c in v]
 
-        # --- Створюємо матрицю ризиків ---
-        payoff_matrix = np.zeros((len(candidate_moves), len(obstacles)))
-        for i, move in enumerate(candidate_moves):
+        base_forward = [0, 0, 1]
+        side_mag = 0.8
+
+        candidate_moves = [
+            {"name": "Підйом", "altitude": uav.altitude + 5, "move_vector": base_forward.copy()},
+            {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5), "move_vector": base_forward.copy()},
+            {"name": "Вліво", "altitude": uav.altitude, "move_vector": [-side_mag, 0, 1]},
+            {"name": "Вправо", "altitude": uav.altitude, "move_vector": [side_mag, 0, 1]},
+        ]
+        for move in candidate_moves:
+            move["move_vector"] = _normalize(move["move_vector"])
+
+        # Обчислюємо для кожного кандидата мінімальний приріст |vert_diff| по всіх перешкодах
+        moves_increase_separation = []
+        orig_vert_diffs = [uav.altitude - obs.altitude for obs in obstacles] if obstacles else [0.0]
+
+        for move in candidate_moves:
+            increases_all = True
+            worst_delta = None
+            for obs_idx, obs in enumerate(obstacles):
+                orig = orig_vert_diffs[obs_idx]
+                new = move["altitude"] - obs.altitude
+                # різниця абсолютних відстаней: позитив -> збільшення відриву
+                delta = abs(new) - abs(orig)
+                if worst_delta is None or delta < worst_delta:
+                    worst_delta = delta
+                if delta <= 0.0:
+                    # цей маневр не збільшує відрив для хоча б однієї перешкоди
+                    increases_all = False
+            if increases_all:
+                moves_increase_separation.append(move)
+
+        # Якщо є кандидати, які збільшують відрив для всіх перешкод — розглядаємо лише їх
+        eval_moves = moves_increase_separation if moves_increase_separation else candidate_moves
+
+        payoff_matrix = np.zeros((len(eval_moves), len(obstacles)))
+        lookahead_s = 5.0
+
+        for i, move in enumerate(eval_moves):
             temp_uav = copy.deepcopy(uav)
             temp_uav.altitude = move["altitude"]
             temp_uav.move_vector = move["move_vector"]
 
+            mv_norm = _normalize(temp_uav.move_vector)
+            speed_ms = max(temp_uav.speed / 3.6, 0.1)
+            dx = mv_norm[0] * speed_ms * lookahead_s
+            dz = mv_norm[2] * speed_ms * lookahead_s
+
+            total_risk = 0.0
+            total_vert_penalty = 0.0
             for j, obs in enumerate(obstacles):
-                base_risk = compute_collaborative_risk(
-                    temp_uav, [obs], self.ml_system, gamma=2.0, min_altitude=self.min_altitude
-                )
+                proj_pos = [temp_uav.position[0] + dx, temp_uav.position[1], temp_uav.position[2] + dz]
+                hor_dist = compute_distance([proj_pos[0], 0, proj_pos[2]], [obs.position[0], 0, obs.position[2]])
+                new_vert = temp_uav.altitude - obs.altitude
+                orig_vert = uav.altitude - obs.altitude
 
-                # 🔹 Штраф за наближення до мінімальної висоти
-                altitude_margin = move["altitude"] - self.min_altitude
-                if altitude_margin < 10:
-                    base_risk += (10 - altitude_margin) * 0.05
+                risk = compute_collaborative_risk(temp_uav, [obs], self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
 
-                # 🔹 Легкий штраф за надмірний підйом
-                if move["altitude"] - uav.altitude > 15:
-                    base_risk += 0.1
+                # штраф за зменшення відриву: якщо |new| < |orig| -> великий штраф
+                vert_delta = abs(new_vert) - abs(orig_vert)
+                if vert_delta < 0:
+                    # чим більше зменшення — тим більший штраф
+                    total_vert_penalty += (-vert_delta)
 
-                payoff_matrix[i, j] = base_risk
+                # невеликі додаткові корекції (як раніше)
+                vert_change_toward_obs = max(0.0, abs(orig_vert) - abs(new_vert))
+                risk += vert_change_toward_obs * 0.08
+                if new_vert > 10.0:
+                    risk -= 0.03
 
-        # --- Обчислюємо поточний ризик ---
-        current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+                risk += 1.0 / (hor_dist + 0.1)
+                if temp_uav.altitude <= self.min_altitude + self.min_altitude_margin:
+                    risk += 1.0
+                if temp_uav.altitude - uav.altitude > 15:
+                    risk += 0.1
 
-        # --- Використовуємо гібридний метод ---
-        decision_index, strategy = hybrid_decision(payoff_matrix, current_risk)
-        best_move = candidate_moves[decision_index]
+                total_risk += risk
 
-        # --- Застосовуємо вибраний маневр ---
-        uav.altitude = best_move["altitude"]
-        uav.move_vector = best_move["move_vector"]
+            # якщо ми не знайшли moves_increase_separation (тобто eval_moves == candidate_moves),
+            # додатково караємо ті маневри, що зменшують розрив сильніше
+            if not moves_increase_separation:
+                # масштаб штрафу можна налаштувати (тут досить великий, щоб відсіяти "приближаючі" варіанти)
+                total_risk += total_vert_penalty * 5.0
 
-        print(f"🧭 [DAA] Hybrid strategy: {strategy}")
-        print(f"✅ UAV {uav.name}: маневр '{best_move['name']}' (risk={current_risk:.2f})")
+            payoff_matrix[i, :] = total_risk
+            self.log_func(f"[DEBUG] Eval Move '{move['name']}' -> alt={move['altitude']}, total_risk={total_risk:.3f}, vert_penalty={total_vert_penalty:.3f}")
+
+        # Якщо ми фільтрували — треба відновити індексацію до оригінальної таблиці для вибору імені
+        chosen_idx = 0
+        if len(eval_moves) == 0:
+            # нестандартна ситуація; вибираємо перший кандидат
+            chosen_move = candidate_moves[0]
+        else:
+            current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+            self.log_func(f"[DEBUG] Current risk: {current_risk:.3f}")
+            decision_index, strategy = hybrid_decision(payoff_matrix, current_risk)
+            chosen_move = eval_moves[int(decision_index)]
+
+        # ПРАВКА: не змінюємо altitude миттєво — ставимо target_altitude, а в move_model робимо плавне наближення
+        uav.target_altitude = max(self.min_altitude, chosen_move["altitude"])
+        uav.move_vector = _normalize(chosen_move["move_vector"])
+        # утримання маневру (щоб не переобчислювати щосекунди)
+        uav._maneuver_hold_ticks = int(1.0 / (self.timer.interval() / 1000.0))
+        self.log_func(f"[MANEUVER] Selected '{chosen_move['name']}' alt_target={uav.target_altitude}, vec={uav.move_vector}, strategy={strategy if 'strategy' in locals() else 'N/A'}")
+
 
     def update_simulation_step(self):
-        print("[STEP] === Tick start ===")
-
         if self.ml_system is None:
-            print("[STEP] ❌ ML System не передана — выход")
+            print("[STEP] ❌ ML System не передана — вихід")
             return
 
         uav = next((o for o in self.objects if isinstance(o, UAV)), None)
         obstacles = [o for o in self.objects if isinstance(o, Obstacle)]
         if not uav:
-            print("[STEP] ❌ UAV не найден — выход")
+            print("[STEP] ❌ UAV не знайдено — вихід")
             return
 
-        print(f"[STEP] ✅ UAV найден: {uav.name}, obstacles: {len(obstacles)}")
-
         risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude) + 0.5
-        print(f"[STEP] 🧠 Collaborative Risk={risk:.2f}")
+        self.log_func(f"[STEP] Risk={risk:.3f}")
 
         if risk < 0.3:
             pass
@@ -397,15 +460,17 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             for obs in obstacles:
                 self.handle_warning_zone(uav, obs)
         else:
-            self.handle_danger_zone(uav, obstacles)
+            # --- додаємо перевірку утримання маневру ---
+            if hasattr(uav, "_maneuver_hold_ticks") and uav._maneuver_hold_ticks > 0:
+                uav._maneuver_hold_ticks -= 1
+            else:
+                self.handle_danger_zone(uav, obstacles)
 
         for obj in self.objects:
             if isinstance(obj, (UAV, Obstacle)):
                 self.move_model(obj)
-                print(f"[STEP] 🔹 Об’єкт '{obj.name}' updated: pos={obj.position}, rot={obj.rotation}")
 
         self.update()
-        print("[STEP] ✅ Кадр оновлено\n")
 
     def get_movement_vector(self, obj):
         """
@@ -422,18 +487,47 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
 
     def move_model(self, obj):
+        """
+        Рух моделі по x/z згідно move_vector, і поступова корекція висоти до obj.target_altitude.
+        Максимальна зміна висоти за тик — max_alt_change_per_tick (м).
+        """
+        # (рух по площині)
         speed_ms = (obj.speed / 3.6) * 0.05 * self.sim_speed
         fx, fy, fz = self.get_movement_vector(obj)
         obj.position[0] += fx * speed_ms
         obj.position[2] += fz * speed_ms
-        new_y = max(obj.altitude, self.min_altitude)
-        obj.position[1] = new_y
-        print(f"[MOVE] {obj.name}: Δx={fx*speed_ms:.2f}, Δz={fz*speed_ms:.2f}, pos={obj.position}")
+
+        # Плавне наближення висоти
+        # Якщо у об'єкта немає target_altitude — ініціалізуємо його
+        if not hasattr(obj, "target_altitude"):
+            obj.target_altitude = getattr(obj, "altitude", obj.position[1])
+
+        # захист — не дозволяємо опуститися нижче min_altitude
+        target = max(obj.target_altitude, self.min_altitude)
+
+        # максимальна швидкість зміни висоти за тик (налаштуй при потребі)
+        max_alt_change_per_tick = 1.0  # м за тик
+        diff = target - obj.altitude
+        if abs(diff) <= 1e-6:
+            new_alt = obj.altitude
+        else:
+            change = math.copysign(min(abs(diff), max_alt_change_per_tick), diff)
+            new_alt = obj.altitude + change
+
+        obj.altitude = new_alt
+        obj.position[1] = max(new_alt, self.min_altitude)
+
+        # лог для дебага
+        self.log_func(f"[MOVE] {obj.name}: Δx={fx*speed_ms:.2f}, Δz={fz*speed_ms:.2f}, alt={obj.altitude:.2f}, pos={obj.position}")
+
 
     def apply_model_altitudes(self):
-        """Оновлює висоту моделей відповідно до параметрів altitude."""
+        """Оновлює висоту моделей відповідно до параметрів altitude і ініціалізує target_altitude."""
         for obj in self.objects:
+            # синхронізуємо позицію з прописаною altitude
             obj.position[1] = obj.altitude
+            # встановлюємо початкову цільову висоту = поточна
+            obj.target_altitude = obj.altitude
         self.update()
 
 
