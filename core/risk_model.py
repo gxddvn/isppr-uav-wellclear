@@ -25,43 +25,63 @@ def compute_combined_risk(*risks, gamma=2.0):
 
 def compute_collaborative_risk(uav, obstacles, ml_system, gamma=2.0, min_altitude=0.0):
     """
-    Спрощена оцінка колаборативного ризику (10 ключові параметри) з урахуванням gamma і min_altitude.
+    Повністю переписана модель ризику.
+    ✅ Без зайвих експонент, чиста фізика + ML як коректор.
+    Ризик росте експоненційно при зменшенні відстані,
+    з урахуванням висоти, напрямку та швидкостей.
     """
-    total_risk = 0.0
+
+    print(f"[Risk compute] Start uav.position={uav.position} obstacles={obstacles}")
+
     if not obstacles:
         return 0.0
 
+    risks = []
+
     for obs in obstacles:
-        # Відстань та різниця по висоті
-        dist = compute_distance(uav.position, obs.position)
+        # --- Вихідні дані ---
+        dist = np.linalg.norm(np.array(uav.position) - np.array(obs.position))
         alt_diff = abs(uav.altitude - obs.altitude)
-        heading_diff = compute_heading_diff(uav.rotation[1], obs.rotation[1])
+        heading_diff = abs((uav.rotation[1] - obs.rotation[1] + 180) % 360 - 180)
         speed_diff = abs(uav.speed - obs.speed)
 
-        # === Формуємо features для ML ===
-        v1 = uav.speed
-        v2 = obs.speed
-        heading1 = uav.rotation[1]
-        heading2 = obs.rotation[1]
-        distance = dist
-        alt1 = uav.altitude
-        alt2 = obs.altitude
+        # print(f"[Risk compute] dist={dist:.2f}, alt_diff={alt_diff:.2f}, heading_diff={heading_diff:.2f}, speed_diff={speed_diff:.2f}")
 
-        features = [v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff]
-        risk_ml = float(ml_system.predict(features))
+        # --- Геометрична база ризику ---
+        base = math.exp(-dist / 150.0)
+        height_factor = (1 - min(alt_diff / 100.0, 1.0)) ** 2
+        heading_factor = 1.0 + 0.5 * (1.0 - math.cos(math.radians(heading_diff)))
+        speed_factor = 1.0 + min(speed_diff / 200.0, 1.0) * 0.3
 
-        # Геометричний ризик із урахуванням мінімальної висоти
-        height_factor = 1.0 if uav.altitude >= min_altitude else 1.0 + (min_altitude - uav.altitude)/min_altitude
-        risk_geo = math.exp(-dist / 100) * height_factor
+        geo_risk = base * height_factor * heading_factor * speed_factor
+        # print(f"[Risk compute] base={base:.4f}, height_factor={height_factor:.4f}, heading_factor={heading_factor:.4f}, speed_factor={speed_factor:.4f}")
+        # print(f"[Risk compute] geo_risk(before clip)={geo_risk:.4f}")
 
-        # Комбінуємо ризики з гамою (γ-норма)
-        risk = (0.7 * risk_ml)**gamma + (0.3 * risk_geo)**gamma
-        total_risk += risk
+        # --- Висота польоту нижче мінімуму ---
+        if uav.altitude < min_altitude + 5:
+            geo_risk *= 1.2
+            # print(f"[Risk compute] low-altitude boost applied -> {geo_risk:.4f}")
 
-    # Середній ризик із урахуванням γ-норми
-    avg_risk = (total_risk / len(obstacles))**(1.0/gamma)
+        geo_risk = min(geo_risk, 1.0)
+
+        # --- ML коректор ---
+        features = [uav.speed, obs.speed, uav.rotation[1], obs.rotation[1],
+                    dist, uav.altitude, obs.altitude, alt_diff, heading_diff, speed_diff]
+        ml_risk = float(ml_system.predict(features))
+        # print(f"[Risk compute] ml_risk={ml_risk:.4f}")
+
+        # --- Комбінація ---
+        risk = 0.8 * geo_risk + 0.2 * ml_risk
+        risk = min(max(risk, 0.0), 1.0)
+        # print(f"[Risk compute] final risk={risk:.4f}")
+
+        risks.append(risk)
+
+    # --- γ-норма для кількох перешкод ---
+    avg_risk = (sum(r ** gamma for r in risks) / len(risks)) ** (1.0 / gamma)
+    # print(f"[Risk compute] risks={risks}, avg_risk={avg_risk:.4f}")
+
     return min(max(avg_risk, 0.0), 1.0)
-
 
 def wald(payoff_matrix):
     """

@@ -261,6 +261,8 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             QMessageBox.warning(self, "Помилка", "Не всі моделі мають швидкість і висоту!")
             return
 
+        self.apply_model_altitudes()
+
         for obj in self.objects:
             print(f"obj.name: {obj.name}")
             print(f"obj.position[1]: {obj.position[1]}")
@@ -451,15 +453,19 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             print("[STEP] ❌ UAV не знайдено — вихід")
             return
 
-        risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude) + 0.5
+        risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
         self.log_func(f"[STEP] Risk={risk:.3f}")
+        print(f"[STEP] Risk={risk:.3f}")
 
         if risk < 0.3:
+            print(f"[STEP Low] Risk={risk:.3f}")
             pass
         elif risk < 0.7:
+            print(f"[STEP Medium] Risk={risk:.3f}")
             for obs in obstacles:
                 self.handle_warning_zone(uav, obs)
         else:
+            print(f"[STEP Danger] Risk={risk:.3f}")
             # --- додаємо перевірку утримання маневру ---
             if hasattr(uav, "_maneuver_hold_ticks") and uav._maneuver_hold_ticks > 0:
                 uav._maneuver_hold_ticks -= 1
@@ -498,27 +504,36 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         obj.position[2] += fz * speed_ms
 
         # Плавне наближення висоти
-        # Якщо у об'єкта немає target_altitude — ініціалізуємо його
         if not hasattr(obj, "target_altitude"):
             obj.target_altitude = getattr(obj, "altitude", obj.position[1])
 
         # захист — не дозволяємо опуститися нижче min_altitude
         target = max(obj.target_altitude, self.min_altitude)
 
-        # максимальна швидкість зміни висоти за тик (налаштуй при потребі)
-        max_alt_change_per_tick = 1.0  # м за тик
+        # максимальна швидкість зміни висоти за тик
+        max_alt_change_per_tick = 1.0
         diff = target - obj.altitude
         if abs(diff) <= 1e-6:
-            new_alt = obj.altitude
+            change = 0.0
         else:
             change = math.copysign(min(abs(diff), max_alt_change_per_tick), diff)
-            new_alt = obj.altitude + change
+        new_alt = obj.altitude + change
 
+        # оновлюємо фактичну висоту і позицію по Y
         obj.altitude = new_alt
         obj.position[1] = max(new_alt, self.min_altitude)
 
-        # лог для дебага
-        self.log_func(f"[MOVE] {obj.name}: Δx={fx*speed_ms:.2f}, Δz={fz*speed_ms:.2f}, alt={obj.altitude:.2f}, pos={obj.position}")
+        # 🔹 Детальний лог для дебага
+        print(f"[MOVE DEBUG] {obj.name}:")
+        print(f"    speed_ms = {speed_ms:.3f}")
+        print(f"    move_vector_local = {obj.move_vector}")
+        print(f"    move_vector_world = [{fx:.3f}, {fy:.3f}, {fz:.3f}]")
+        print(f"    position_before = {obj.position[0]-fx*speed_ms:.3f}, {obj.position[1]:.3f}, {obj.position[2]-fz*speed_ms:.3f}")
+        print(f"    target_altitude = {obj.target_altitude:.3f}")
+        print(f"    diff = {diff:.3f}")
+        print(f"    change = {change:.3f}")
+        print(f"    altitude_after = {obj.altitude:.3f}")
+        print(f"    position_after = {obj.position}")
 
 
     def apply_model_altitudes(self):
