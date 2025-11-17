@@ -16,11 +16,17 @@ from core.risk_model import compute_distance, compute_alt_diff, compute_heading_
 import math
 import numpy as np
 import copy
-
+from .kyiv_map import KyivMapLayer
+from core.map_generator import generate_kyiv_map_png, load_kyiv_districts
 
 class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def __init__(self, parent=None, ml_system=None, log_func=print):
         super().__init__(parent)
+        
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        self.kyiv_map = None
+
         self.setMinimumSize(800, 600)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -40,8 +46,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         # Мінімальний вертикальний буфер від перешкоди (щоб не наближатися в висоті)
         self.min_vertical_buffer = 5.0  # м — якщо маневр опускає нижче obs.altitude + buffer -> великий штраф
 
-
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         try:
             self.mesh_uav = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\uav", "scene.gltf"))
             self.mesh_plane = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\plane", "scene.gltf"))
@@ -99,6 +103,21 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        map_path = os.path.join(BASE_DIR, "assets/maps/kyiv_map.png")
+        bounds = generate_kyiv_map_png(map_path)
+        districts = load_kyiv_districts()
+
+        print(districts[["name", "admin_level"]])
+
+        self.kyiv_map = KyivMapLayer(
+            texture_path=map_path,
+            geojson_path=os.path.join(BASE_DIR, "assets/maps/kyiv_districts_clean.geojson"),
+            bounds=bounds
+        )
+
+        self.kyiv_map.load_texture_qt()
         
         for obj in self.objects:
             if obj.mesh:
@@ -112,7 +131,9 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         glLoadIdentity()
         apply_camera(self)
 
-        draw_grid()
+        draw_grid(self.kyiv_map, step=500)
+
+        self.kyiv_map.draw()
 
         # --- Червона зона обмеження ---
         self.draw_min_altitude_zone()

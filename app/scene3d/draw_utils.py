@@ -1,17 +1,26 @@
 from OpenGL.GL import *
 import math
+from .kyiv_map import KyivMapLayer
 
-def draw_grid(size=500, step=50):
+def draw_grid(map_layer, step=500):
+    """
+    Рисуем сетку по размеру карты, чтобы совпадала с текстурой.
+    """
     glDisable(GL_LIGHTING)
     glColor3f(0.3, 0.3, 0.3)
+
+    # Берем размер карты из draw() (±size)
+    size = 500  # должен совпадать с map_layer.draw() 
     glBegin(GL_LINES)
-    for i in range(-size, size + 1, step):
-        glVertex3f(i, 0, -size)
-        glVertex3f(i, 0, size)
-        glVertex3f(-size, 0, i)
-        glVertex3f(size, 0, i)
+    for i in range(-size, size+1, step):
+        x = float(i)
+        glVertex3f(x, 0, -size)
+        glVertex3f(x, 0, size)
+        glVertex3f(-size, 0, x)
+        glVertex3f(size, 0, x)
     glEnd()
     glEnable(GL_LIGHTING)
+
 
 
 def draw_outline(display_list):
