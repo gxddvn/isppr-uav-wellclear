@@ -41,6 +41,18 @@ class KyivMapLayer:
 
         # self.load_texture_safe()
         self._load_geojson()
+        self.district_colors = [
+            (1, 0, 0),       # червоний
+            (0, 1, 0),       # зелений
+            (0, 0, 1),       # синій
+            (1, 1, 0),       # жовтий
+            (1, 0, 1),       # фіолетовий
+            (0, 1, 1),       # бірюзовий
+            (0.8, 0.4, 0),   # коричневий
+            (0.5, 0, 0.5),   # темно-фіолетовий
+            (0.3, 0.7, 0.3), # світло-зелений
+            (0.9, 0.5, 0.2)  # помаранчевий
+        ]
 
     # ------------------------------------------------------
     #                 LOAD TEXTURE
@@ -152,23 +164,11 @@ class KyivMapLayer:
         glDisable(GL_LIGHTING)
 
         # список кольорів для районів (можно підібрати свої)
-        colors = [
-            (1, 0, 0),       # червоний
-            (0, 1, 0),       # зелений
-            (0, 0, 1),       # синій
-            (1, 1, 0),       # жовтий
-            (1, 0, 1),       # фіолетовий
-            (0, 1, 1),       # бірюзовий
-            (0.8, 0.4, 0),   # коричневий
-            (0.5, 0, 0.5),   # темно-фіолетовий
-            (0.3, 0.7, 0.3), # світло-зелений
-            (0.9, 0.5, 0.2)  # помаранчевий
-        ]
 
         glLineWidth(3.0)  # товщина лінії
 
         for i, dist in enumerate(self.districts):
-            color = colors[i % len(colors)]
+            color = self.district_colors[i % len(self.district_colors)]
             glColor3f(*color)
 
             for poly in dist["polygons"]:
@@ -237,3 +237,91 @@ class KyivMapLayer:
             mz = 2*center_z - z  # дзеркало відносно center_z
             mirrored.append((x, mz))
         return mirrored
+    
+    # отримати мін. висоту району за індексом або по позиції
+    def set_min_altitude_for_district(self, district_index: int, min_alt: float):
+        if 0 <= district_index < len(self.districts):
+            self.districts[district_index]["min_altitude"] = float(min_alt)
+            return True
+        return False
+
+    def set_min_altitude_for_district_by_name(self, name: str, min_alt: float):
+        for d in self.districts:
+            if d["name"] == name:
+                d["min_altitude"] = float(min_alt)
+                return True
+        return False
+
+    # get_min_altitude(x,z) вже викликає find_district і повертає min_altitude
+    def get_min_altitude(self, x, z):
+        d = self.find_district(x, z)
+        if d:
+            return float(d.get("min_altitude", 0))
+        return 0.0
+
+    # експортуємо тільки мапу мін. висот у JSON, щоб зберегти налаштування
+    def export_min_altitudes(self, path: str):
+        out = {d["name"]: d.get("min_altitude", 0) for d in self.districts}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+
+    def import_min_altitudes(self, path: str):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for d in self.districts:
+                if d["name"] in data:
+                    d["min_altitude"] = float(data[d["name"]])
+            return True
+        except Exception as e:
+            print("[KyivMap] ❌ import_min_altitudes failed:", e)
+            return False
+        
+    def draw_min_altitude_boxes(self):
+        glDisable(GL_LIGHTING)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        for i, dist in enumerate(self.districts):
+            min_alt = dist.get("min_altitude", 0)
+            if min_alt <= 0:
+                continue
+
+            # 🔥 Колір району
+            r, g, b = self.district_colors[i % len(self.district_colors)]
+            glColor4f(r, g, b, 0.25)  # прозорий
+
+            for poly in dist["polygons"]:
+                mirrored_poly = self.mirror_polygon_x(poly)
+                self._draw_extruded_polygon(mirrored_poly, min_alt)
+
+        glDisable(GL_BLEND)
+        glEnable(GL_LIGHTING)
+
+
+    def _draw_extruded_polygon(self, poly, height):
+        """Малює екструдований полігон (нижня та верхня кришки + бокові стінки)."""
+        # Верхня кришка
+        glBegin(GL_POLYGON)
+        for x, z in poly:
+            glVertex3f(x, height, z)
+        glEnd()
+
+        # Нижня кришка
+        glBegin(GL_POLYGON)
+        for x, z in poly:
+            glVertex3f(x, 0, z)
+        glEnd()
+
+        # Бокові стінки
+        glBegin(GL_QUADS)
+        for i in range(len(poly)):
+            x1, z1 = poly[i]
+            x2, z2 = poly[(i + 1) % len(poly)]
+
+            glVertex3f(x1, 0, z1)
+            glVertex3f(x2, 0, z2)
+            glVertex3f(x2, height, z2)
+            glVertex3f(x1, height, z1)
+
+        glEnd()

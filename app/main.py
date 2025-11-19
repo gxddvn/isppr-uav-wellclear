@@ -19,6 +19,7 @@ from app.widgets.templates_panel import TemplatesPanel
 from app.widgets.console_panel import ConsolePanel
 from app.widgets.simulation_panel import SimulationPanel
 from app.scene3d.scene3d import Scene3D
+from app.widgets.district_heights_panel import DistrictHeightsPanel
 
 class MainWindow(QMainWindow):
     def __init__(self, ml_system=None):
@@ -74,12 +75,15 @@ class MainWindow(QMainWindow):
         self.model_browser = ModelBrowser(self.scene3d)
         self.properties_panel = PropertiesPanel()
         self.templates_panel = TemplatesPanel(scene3d=self.scene3d)
+        self.district_heights_panel = DistrictHeightsPanel(kyiv_map_layer=self.scene3d.kyiv_map)
+        left_tabs.addTab(self.district_heights_panel, "Мін. висоти районів")
         left_tabs.addTab(self.model_browser, "Моделі")
         left_tabs.addTab(self.properties_panel, "Параметри")
         left_tabs.addTab(self.templates_panel, "Шаблони")
         splitter.addWidget(left_tabs)
         self.scene3d.model_browser = self.model_browser
 
+        self.district_heights_panel.heights_updated.connect(lambda mapping: self.scene3d.on_district_heights_updated(mapping))
         self.model_browser.selection_changed.connect(self.properties_panel.set_model)
         self.properties_panel.model_updated.connect(self.scene3d.update_initial_state)
 
@@ -105,7 +109,7 @@ class MainWindow(QMainWindow):
         self.sim_panel.pause_clicked.connect(self.scene3d.pause_simulation)
         self.sim_panel.stop_clicked.connect(self.scene3d.stop_simulation)
 
-        self.sim_panel.min_altitude_changed.connect(self.scene3d.set_min_altitude)
+        # self.sim_panel.min_altitude_changed.connect(self.scene3d.set_min_altitude)
 
         # регулювання швидкості
         self.sim_panel.speed_changed.connect(self.on_speed_changed)
