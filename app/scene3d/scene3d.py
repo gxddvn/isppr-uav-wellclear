@@ -310,8 +310,8 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
     
     def handle_warning_zone(self, uav, obstacles):
         """
-        Аналог handle_danger_zone, но не принимает решение.
-        Возвращает список маневров с рассчитанным риском, чтобы показать пользователю.
+        Динамический подбор маневров в жёлтой зоне.
+        Риск рассчитывается для каждой итерации, пока не станет < 0.3.
         """
         def _normalize(v):
             norm = math.sqrt(sum(c*c for c in v))
@@ -319,59 +319,48 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         base_forward = [0, 0, 1]
         side_mag = 0.8
+        max_iter = 20  # максимальное количество шагов изменения высоты/смещения
 
-        # Базовые кандидаты (как в handle_danger_zone)
         candidate_moves = [
-            { "name": "Підйом", "altitude": uav.altitude + 5, "move_vector": base_forward.copy() },
-            { "name": "Спуск", "altitude": max(self.get_local_min_altitude_for(uav), uav.altitude - 5), "move_vector": base_forward.copy() },
-            { "name": "Вліво", "altitude": uav.altitude, "move_vector": [-side_mag, 0, 1] },
-            { "name": "Вправо", "altitude": uav.altitude, "move_vector": [side_mag, 0, 1] },
+            {"name": "Підйом", "direction": [0, 1, 0], "base_vector": base_forward.copy()},
+            {"name": "Спуск", "direction": [0, -1, 0], "base_vector": base_forward.copy()},
+            {"name": "Вліво", "direction": [-1, 0, 0], "base_vector": base_forward.copy()},
+            {"name": "Вправо", "direction": [1, 0, 0], "base_vector": base_forward.copy()},
         ]
 
-        for move in candidate_moves:
-            move["move_vector"] = _normalize(move["move_vector"])
-
-        # Рассчитываем риск для каждого манёвр-候 candidate
         evaluated = []
-        lookahead_s = 5.0
 
         for move in candidate_moves:
             temp_uav = copy.deepcopy(uav)
-            temp_uav.altitude = move["altitude"]
-            temp_uav.move_vector = move["move_vector"]
-
-            mv_norm = _normalize(temp_uav.move_vector)
-            speed_ms = max(temp_uav.speed / 3.6, 0.1)
-
-            dx = mv_norm[0] * speed_ms * lookahead_s
-            dz = mv_norm[2] * speed_ms * lookahead_s
-
-            total_risk = 0.0
-            for obs in obstacles:
-                proj_pos = [temp_uav.position[0] + dx, temp_uav.position[1], temp_uav.position[2] + dz]
-                hor_dist = compute_distance(
-                    [proj_pos[0], 0, proj_pos[2]],
-                    [obs.position[0], 0, obs.position[2]]
-                )
+            step = 1.0  # шаг изменения высоты или бокового смещения
+            for i in range(max_iter):
+                # корректируем altitude или смещение
+                temp_uav.altitude += move["direction"][1] * step
+                temp_uav.move_vector = [b + move["direction"][0] * step for b in move["base_vector"]]
+                temp_uav.move_vector = _normalize(temp_uav.move_vector)
 
                 risk = compute_collaborative_risk(
-                    uav, obstacles, self.ml_system,
-                    gamma=2.0,
-                    min_altitude=self.get_local_min_altitude_for(uav)
+                    temp_uav, obstacles, self.ml_system,
+                    gamma=2.0, min_altitude=self.get_local_min_altitude_for(temp_uav)
                 )
 
-                # Добавим немного физики (как в red zone)
-                if hor_dist < 15:
-                    risk += 1.0 / (hor_dist + 0.1)
-
-                total_risk += risk
-
-            evaluated.append({
-                "name": move["name"],
-                "altitude": move["altitude"],
-                "move_vector": move["move_vector"],
-                "risk": round(total_risk, 3)
-            })
+                # Если риск < 0.3 — сохраняем этот вариант и выходим из цикла
+                if risk < 0.3:
+                    evaluated.append({
+                        "name": move["name"],
+                        "altitude": temp_uav.altitude,
+                        "move_vector": temp_uav.move_vector,
+                        "risk": round(risk, 3)
+                    })
+                    break
+            else:
+                # Если не удалось снизить риск ниже 0.3, сохраняем последний вариант
+                evaluated.append({
+                    "name": move["name"],
+                    "altitude": temp_uav.altitude,
+                    "move_vector": temp_uav.move_vector,
+                    "risk": round(risk, 3)
+                })
 
         return evaluated
 
@@ -504,19 +493,35 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             print("[STEP] ❌ UAV не знайдено — вихід")
             return
 
-        risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
+        risk = compute_collaborative_risk(uav, obstacles, self.ml_system,
+                                        gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
         self.log_func(f"[STEP] Risk={risk:.3f}")
         print(f"[STEP] Risk={risk:.3f}")
 
+        # 🔹 Проверка удержания маневра в жёлтой зоне
+        if hasattr(uav, "_maneuver_in_progress") and uav._maneuver_in_progress:
+            # Пока маневр выполняется — просто двигаем модель
+            for obj in self.objects:
+                self.move_model(obj)
+            self.update()
+            # Проверяем завершение маневра по фактическому риску
+            current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system,
+                                                    gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
+            if current_risk < 0.3 or current_risk >= 0.7:
+                # Маневр завершен (вышли из жёлтой зоны)
+                uav._maneuver_in_progress = False
+            return
+
+        # 🔹 Зеленая зона
         if risk < 0.3:
             print(f"[STEP Low] Risk={risk:.3f}")
-            pass
-        elif risk < 0.7:
-            # Если удерживаем маневр — не вызываем модалку
-            if hasattr(uav, "_maneuver_hold_ticks") and uav._maneuver_hold_ticks > 0:
-                uav._maneuver_hold_ticks -= 1
-                return
+            for obj in self.objects:
+                self.move_model(obj)
+            self.update()
+            return
 
+        # 🔹 Жёлтая зона
+        elif risk < 0.7:
             # Ставим паузу
             self.pause_simulation()
 
@@ -539,23 +544,23 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                 idx = options.index(choice)
                 move = evaluated[idx]
 
-                # Применяем манёвр как в красной зоне
+                # Применяем манёвр
                 uav.target_altitude = move["altitude"]
                 uav.move_vector = move["move_vector"]
-
-                # Hold как в красной зоне
-                uav._maneuver_hold_ticks = int(1.0 / (self.timer.interval()/1000))
+                uav._maneuver_in_progress = True  # включаем удержание
 
                 # Возобновляем симуляцию
                 self.resume_simulation()
+
+        # 🔹 Красная зона
         else:
             print(f"[STEP Danger] Risk={risk:.3f}")
-            # --- додаємо перевірку утримання маневру ---
             if hasattr(uav, "_maneuver_hold_ticks") and uav._maneuver_hold_ticks > 0:
                 uav._maneuver_hold_ticks -= 1
             else:
                 self.handle_danger_zone(uav, obstacles)
 
+        # 🔹 Движение всех моделей
         for obj in self.objects:
             if isinstance(obj, (UAV, Obstacle)):
                 self.move_model(obj)
