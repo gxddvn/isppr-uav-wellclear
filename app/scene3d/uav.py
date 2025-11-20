@@ -7,9 +7,9 @@ class UAV(BaseModel3D):
         super().__init__(name, mesh, position, rotation, speed, altitude, scale, move_vector)
         self.type = "UAV"
         self.safe_zones = {
-            "red": 40,
-            "yellow": 70,
-            "green": 100,
+            "red": 150,
+            "yellow": 450,
+            "green": 1450,
         }
 
     def draw(self, selected=False):
@@ -23,13 +23,14 @@ class UAV(BaseModel3D):
             glCallList(self.display_list)
 
         # малюємо safe zones
+        visual_scale = self.scale + 0.5
         colors = {"green": (0, 1, 0), "yellow": (1, 1, 0), "red": (1, 0, 0)}
         prev_radius = 0
         for name, radius in self.safe_zones.items():
             draw_ring(
                 position=(0, 0, 0),  # в локальному просторі моделі
-                inner_radius=prev_radius,
-                outer_radius=radius,
+                inner_radius=prev_radius * visual_scale,
+                outer_radius=radius * visual_scale,
                 color=colors[name],
                 alpha=0.25
             )
