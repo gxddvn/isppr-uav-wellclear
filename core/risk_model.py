@@ -24,64 +24,77 @@ def compute_combined_risk(*risks, gamma=2.0):
     return (np.sum(risks**gamma))**(1.0/gamma)
 
 def compute_collaborative_risk(uav, obstacles, ml_system, gamma=2.0, min_altitude=0.0):
-    """
-    Повністю переписана модель ризику.
-    ✅ Без зайвих експонент, чиста фізика + ML як коректор.
-    Ризик росте експоненційно при зменшенні відстані,
-    з урахуванням висоти, напрямку та швидкостей.
-    """
-
-    print(f"[Risk compute] Start uav.position={uav.position} obstacles={obstacles}")
 
     if not obstacles:
         return 0.0
 
+    # межі зон (масштабовані)
+    red_R    = uav.safe_zones["red"]    * uav.scale
+    yellow_R = uav.safe_zones["yellow"] * uav.scale
+    green_R  = uav.safe_zones["green"]  * uav.scale
+
+    zone_coefficients = {
+        "green":  (0.0, 0.3),
+        "yellow": (0.3, 0.7),
+        "red":    (0.7, 1.0),
+    }
+
     risks = []
 
     for obs in obstacles:
-        # --- Вихідні дані ---
+
         dist = np.linalg.norm(np.array(uav.position) - np.array(obs.position))
         alt_diff = abs(uav.altitude - obs.altitude)
         heading_diff = abs((uav.rotation[1] - obs.rotation[1] + 180) % 360 - 180)
         speed_diff = abs(uav.speed - obs.speed)
 
-        # print(f"[Risk compute] dist={dist:.2f}, alt_diff={alt_diff:.2f}, heading_diff={heading_diff:.2f}, speed_diff={speed_diff:.2f}")
+        # -----------------------------
+        # Визначаємо реальну зону
+        # -----------------------------
+        if dist > green_R:
+            # поза зонами
+            geo_risk = 0.0
+        elif dist > yellow_R:
+            zone = "green"
+            zone_R = green_R
+        elif dist > red_R:
+            zone = "yellow"
+            zone_R = yellow_R
+        else:
+            zone = "red"
+            zone_R = red_R
 
-        # --- Геометрична база ризику ---
-        base = math.exp(-dist / 150.0)
-        height_factor = (1 - min(alt_diff / 100.0, 1.0)) ** 2
-        heading_factor = 1.0 + 0.5 * (1.0 - math.cos(math.radians(heading_diff)))
-        speed_factor = 1.0 + min(speed_diff / 200.0, 1.0) * 0.3
+        if dist <= green_R:
+            min_risk, max_risk = zone_coefficients[zone]
 
-        geo_risk = base * height_factor * heading_factor * speed_factor
-        # print(f"[Risk compute] base={base:.4f}, height_factor={height_factor:.4f}, heading_factor={heading_factor:.4f}, speed_factor={speed_factor:.4f}")
-        # print(f"[Risk compute] geo_risk(before clip)={geo_risk:.4f}")
+            # фактор 0..1 залежно від відстані всередині ЗОНИ
+            factor = np.clip((zone_R - dist) / zone_R, 0.0, 1.0)
 
-        # --- Висота польоту нижче мінімуму ---
-        if uav.altitude < min_altitude + 5:
-            geo_risk *= 1.2
-            # print(f"[Risk compute] low-altitude boost applied -> {geo_risk:.4f}")
+            # фізична частина
+            height_factor = (1 - min(alt_diff / (100.0 * uav.scale), 1.0)) ** 2
+            heading_factor = 1.0 + 0.5 * (1.0 - math.cos(math.radians(heading_diff)))
+            speed_factor = 1.0 + min(speed_diff / 200.0, 1.0) * 0.3
 
-        geo_risk = min(geo_risk, 1.0)
+            base = factor * height_factor * heading_factor * speed_factor
 
-        # --- ML коректор ---
-        features = [uav.speed, obs.speed, uav.rotation[1], obs.rotation[1],
-                    dist, uav.altitude, obs.altitude, alt_diff, heading_diff, speed_diff]
+            # масштабування до діапазону цієї зони
+            geo_risk = min_risk + base * (max_risk - min_risk)
+            geo_risk = np.clip(geo_risk, min_risk, max_risk)
+
+        # ML коректор
+        features = [
+            uav.speed, obs.speed, uav.rotation[1], obs.rotation[1],
+            dist, uav.altitude, obs.altitude,
+            alt_diff, heading_diff, speed_diff
+        ]
         ml_risk = float(ml_system.predict(features))
-        # print(f"[Risk compute] ml_risk={ml_risk:.4f}")
 
-        # --- Комбінація ---
         risk = 0.8 * geo_risk + 0.2 * ml_risk
-        risk = min(max(risk, 0.0), 1.0)
-        # print(f"[Risk compute] final risk={risk:.4f}")
+        risks.append(np.clip(risk, 0.0, 1.0))
 
-        risks.append(risk)
-
-    # --- γ-норма для кількох перешкод ---
     avg_risk = (sum(r ** gamma for r in risks) / len(risks)) ** (1.0 / gamma)
-    # print(f"[Risk compute] risks={risks}, avg_risk={avg_risk:.4f}")
+    return np.clip(avg_risk, 0.0, 1.0)
 
-    return min(max(avg_risk, 0.0), 1.0)
 
 def wald(payoff_matrix):
     """

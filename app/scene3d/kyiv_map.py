@@ -85,7 +85,7 @@ class KyivMapLayer:
             self.districts = []
             for feature in data["features"]:
                 name = feature["properties"].get("name", "unknown")
-                min_alt = feature["properties"].get("min_altitude", 50)
+                min_alt = feature["properties"].get("min_altitude", 0)
                 geom = feature["geometry"]
                 polys = []
 

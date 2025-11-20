@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, QTimer
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QInputDialog
 
 from .camera import apply_camera, set_projection
 from .draw_utils import draw_grid, draw_outline, draw_axis_gizmo, draw_trajectory, create_display_list, draw_cube
@@ -460,7 +461,24 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         elif risk < 0.7:
             print(f"[STEP Medium] Risk={risk:.3f}")
             for obs in obstacles:
-                self.handle_warning_zone(uav, obs)
+                self.pause_simulation()
+                options = self.handle_warning_zone(uav, obs)
+                choice, ok = QInputDialog.getItem(
+                    self,
+                    "Желтая зона",
+                    f"UAV {uav.name} приближается к {obs.name}. Выберите маневр:",
+                    [opt["name"] for opt in options],
+                    0,
+                    False
+                )
+                if ok:
+                    selected_move = next(opt for opt in options if opt["name"] == choice)
+                    if "altitude" in selected_move:
+                        uav.target_altitude = selected_move["altitude"]
+                    if "move_vector" in selected_move:
+                        uav.move_vector = selected_move["move_vector"]
+                self.start_simulation()
+                break
         else:
             print(f"[STEP Danger] Risk={risk:.3f}")
             # --- додаємо перевірку утримання маневру ---

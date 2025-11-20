@@ -40,3 +40,14 @@ QMessageBox QLabel {
     color: #FFFFFF;
     font-size: 14px;
 }
+
+QInputDialog {
+    background-color: #1E1E1E;
+    border: 1px solid #3C3C3C;
+    color: #FFFFFF;
+}
+
+QInputDialog QLabel {
+    color: #FFFFFF;
+    font-size: 14px;
+}
