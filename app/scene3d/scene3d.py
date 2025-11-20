@@ -278,6 +278,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.timer.stop()
         print("[Simulation] ⏸ Пауза")
 
+    def resume_simulation(self):
+        """Возобновляет симуляцию без повторной проверки скоростей/высот."""
+        self.is_simulating = True
+        self.timer.start(50)
+        print("[Simulation] ▶ Симуляция возобновлена")
+
     def stop_simulation(self):
         self.is_simulating = False
         self.timer.stop()
@@ -302,26 +308,73 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                 return False
         return True
     
-    def handle_warning_zone(self, uav, obs):
+    def handle_warning_zone(self, uav, obstacles):
         """
-        Генерує варіанти обходу для оператора і виводить їх у консоль.
+        Аналог handle_danger_zone, но не принимает решение.
+        Возвращает список маневров с рассчитанным риском, чтобы показать пользователю.
         """
-        options = [
-            {"name": "Підйом", "altitude": uav.altitude + 5},
-            {"name": "Спуск", "altitude": max(self.get_local_min_altitude_for(uav), uav.altitude - 5)},
-            {"name": "Вліво", "move_vector": [-1, 0, 0]},
-            {"name": "Вправо", "move_vector": [1, 0, 0]},
+        def _normalize(v):
+            norm = math.sqrt(sum(c*c for c in v))
+            return [c / norm if norm > 0 else 0.0 for c in v]
+
+        base_forward = [0, 0, 1]
+        side_mag = 0.8
+
+        # Базовые кандидаты (как в handle_danger_zone)
+        candidate_moves = [
+            { "name": "Підйом", "altitude": uav.altitude + 5, "move_vector": base_forward.copy() },
+            { "name": "Спуск", "altitude": max(self.get_local_min_altitude_for(uav), uav.altitude - 5), "move_vector": base_forward.copy() },
+            { "name": "Вліво", "altitude": uav.altitude, "move_vector": [-side_mag, 0, 1] },
+            { "name": "Вправо", "altitude": uav.altitude, "move_vector": [side_mag, 0, 1] },
         ]
 
-        # Виводимо в консоль
-        self.log_func(f"[WARNING] UAV {uav.name} поруч з перешкодою {obs.name}. Варіанти обходу:")
-        for opt in options:
-            desc = opt.get("name", "не вказано")
-            alt = opt.get("altitude", "—")
-            mv = opt.get("move_vector", "—")
-            self.log_func(f"   ➤ {desc}: altitude={alt}, move_vector={mv}")
+        for move in candidate_moves:
+            move["move_vector"] = _normalize(move["move_vector"])
 
-        return options
+        # Рассчитываем риск для каждого манёвр-候 candidate
+        evaluated = []
+        lookahead_s = 5.0
+
+        for move in candidate_moves:
+            temp_uav = copy.deepcopy(uav)
+            temp_uav.altitude = move["altitude"]
+            temp_uav.move_vector = move["move_vector"]
+
+            mv_norm = _normalize(temp_uav.move_vector)
+            speed_ms = max(temp_uav.speed / 3.6, 0.1)
+
+            dx = mv_norm[0] * speed_ms * lookahead_s
+            dz = mv_norm[2] * speed_ms * lookahead_s
+
+            total_risk = 0.0
+            for obs in obstacles:
+                proj_pos = [temp_uav.position[0] + dx, temp_uav.position[1], temp_uav.position[2] + dz]
+                hor_dist = compute_distance(
+                    [proj_pos[0], 0, proj_pos[2]],
+                    [obs.position[0], 0, obs.position[2]]
+                )
+
+                risk = compute_collaborative_risk(
+                    uav, obstacles, self.ml_system,
+                    gamma=2.0,
+                    min_altitude=self.get_local_min_altitude_for(uav)
+                )
+
+                # Добавим немного физики (как в red zone)
+                if hor_dist < 15:
+                    risk += 1.0 / (hor_dist + 0.1)
+
+                total_risk += risk
+
+            evaluated.append({
+                "name": move["name"],
+                "altitude": move["altitude"],
+                "move_vector": move["move_vector"],
+                "risk": round(total_risk, 3)
+            })
+
+        return evaluated
+
 
     def handle_danger_zone(self, uav, obstacles):
         """
@@ -459,26 +512,42 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             print(f"[STEP Low] Risk={risk:.3f}")
             pass
         elif risk < 0.7:
-            print(f"[STEP Medium] Risk={risk:.3f}")
-            for obs in obstacles:
-                self.pause_simulation()
-                options = self.handle_warning_zone(uav, obs)
-                choice, ok = QInputDialog.getItem(
-                    self,
-                    "Желтая зона",
-                    f"UAV {uav.name} приближается к {obs.name}. Выберите маневр:",
-                    [opt["name"] for opt in options],
-                    0,
-                    False
-                )
-                if ok:
-                    selected_move = next(opt for opt in options if opt["name"] == choice)
-                    if "altitude" in selected_move:
-                        uav.target_altitude = selected_move["altitude"]
-                    if "move_vector" in selected_move:
-                        uav.move_vector = selected_move["move_vector"]
-                self.start_simulation()
-                break
+            # Если удерживаем маневр — не вызываем модалку
+            if hasattr(uav, "_maneuver_hold_ticks") and uav._maneuver_hold_ticks > 0:
+                uav._maneuver_hold_ticks -= 1
+                return
+
+            # Ставим паузу
+            self.pause_simulation()
+
+            # Считаем маневры как в красной зоне, но без выбора
+            evaluated = self.handle_warning_zone(uav, obstacles)
+
+            # Формируем отображение в модалке
+            options = [f"{m['name']} (ризик {int(m['risk']*100)}%)" for m in evaluated]
+
+            choice, ok = QInputDialog.getItem(
+                self,
+                "Жовта зона",
+                "Оберіть маневр:",
+                options,
+                0,
+                False
+            )
+
+            if ok:
+                idx = options.index(choice)
+                move = evaluated[idx]
+
+                # Применяем манёвр как в красной зоне
+                uav.target_altitude = move["altitude"]
+                uav.move_vector = move["move_vector"]
+
+                # Hold как в красной зоне
+                uav._maneuver_hold_ticks = int(1.0 / (self.timer.interval()/1000))
+
+                # Возобновляем симуляцию
+                self.resume_simulation()
         else:
             print(f"[STEP Danger] Risk={risk:.3f}")
             # --- додаємо перевірку утримання маневру ---

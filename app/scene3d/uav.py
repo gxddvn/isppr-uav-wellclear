@@ -11,6 +11,7 @@ class UAV(BaseModel3D):
             "yellow": 450,
             "green": 1450,
         }
+        self._hold_warning_ticks = 0
 
     def draw(self, selected=False):
         glPushMatrix()
