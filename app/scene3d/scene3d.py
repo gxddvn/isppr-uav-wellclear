@@ -48,7 +48,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.camera_pitch = 25.0
         self.rotate_sensitivity = 0.5
         self.initial_states = {}
-        self.min_altitude = 0.0
         # Мінімальний додатковий запас над min_altitude (щоб не сідати прямо на min)
         self.min_altitude_margin = 5.0  # м — змінюй при потребі
 
@@ -133,36 +132,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             self.kyiv_map.draw()
             self.kyiv_map.draw_min_altitude_boxes()
 
-        # --- Червона зона обмеження ---
-        self.draw_min_altitude_zone()
-
         for obj in self.objects:
             obj.draw(selected=(self.selected == obj))
 
         # --- Траєкторії для UAV та Obstacle ---
         for obj in self.objects:
             obj.draw_trajectory()
-
-    def draw_min_altitude_zone(self):
-        """Малює червону прозору зону, нижче якої політ заборонений."""
-        if self.min_altitude <= 0:
-            return
-
-        scene_size = 1000.0
-        height = self.min_altitude
-
-        glDisable(GL_LIGHTING)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
-        glColor4f(1.0, 0.0, 0.0, 0.25)
-        glPushMatrix()
-        glTranslatef(0.0, height / 2.0, 0.0)
-        glScalef(scene_size, height, scene_size)
-        draw_cube(1.0)  # імпортований з draw_utils
-        glPopMatrix()
-
-        glEnable(GL_LIGHTING)
 
     def add_model(self, model_type: str):
         """Додає нову модель до сцени."""
@@ -283,13 +258,16 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.apply_model_altitudes()
 
         for obj in self.objects:
-            print(f"obj.name: {obj.name}")
-            print(f"obj.position[1]: {obj.position[1]}")
-            print(f"obj.altitude: {obj.altitude}")
-            print(f"self.min_altitude: {self.min_altitude}")
-            if obj.position[1] < self.min_altitude:
-                QMessageBox.warning(self, "Помилка", f"Модель {obj.name} знаходиться нижче мінімальної висоти {self.min_altitude} м!")
-                return
+            if isinstance(obj, UAV):
+                min_alt = self.get_local_min_altitude_for(obj)  # <--- вместо self.min_altitude
+                if obj.altitude < min_alt:
+                    QMessageBox.warning(
+                        self,
+                        "Помилка",
+                        f"Модель {obj.name} знаходиться нижче мінімальної висоти району {min_alt:.1f} м!"
+                    )
+                    return
+
         self.is_simulating = True
         self.timer.start(50)  # оновлення кожні 50 мс (~20 FPS)
         print("[Simulation] ▶ Запущено")
@@ -329,7 +307,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         """
         options = [
             {"name": "Підйом", "altitude": uav.altitude + 5},
-            {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5)},
+            {"name": "Спуск", "altitude": max(self.get_local_min_altitude_for(uav), uav.altitude - 5)},
             {"name": "Вліво", "move_vector": [-1, 0, 0]},
             {"name": "Вправо", "move_vector": [1, 0, 0]},
         ]
@@ -360,7 +338,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         candidate_moves = [
             {"name": "Підйом", "altitude": uav.altitude + 5, "move_vector": base_forward.copy()},
-            {"name": "Спуск", "altitude": max(self.min_altitude, uav.altitude - 5), "move_vector": base_forward.copy()},
+            {"name": "Спуск", "altitude": max(self.get_local_min_altitude_for(uav), uav.altitude - 5), "move_vector": base_forward.copy()},
             {"name": "Вліво", "altitude": uav.altitude, "move_vector": [-side_mag, 0, 1]},
             {"name": "Вправо", "altitude": uav.altitude, "move_vector": [side_mag, 0, 1]},
         ]
@@ -411,7 +389,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                 new_vert = temp_uav.altitude - obs.altitude
                 orig_vert = uav.altitude - obs.altitude
 
-                risk = compute_collaborative_risk(temp_uav, [obs], self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+                risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
 
                 # штраф за зменшення відриву: якщо |new| < |orig| -> великий штраф
                 vert_delta = abs(new_vert) - abs(orig_vert)
@@ -426,7 +404,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                     risk -= 0.03
 
                 risk += 1.0 / (hor_dist + 0.1)
-                if temp_uav.altitude <= self.min_altitude + self.min_altitude_margin:
+                if temp_uav.altitude <= self.get_local_min_altitude_for(uav) + self.min_altitude_margin:
                     risk += 1.0
                 if temp_uav.altitude - uav.altitude > 15:
                     risk += 0.1
@@ -448,13 +426,13 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             # нестандартна ситуація; вибираємо перший кандидат
             chosen_move = candidate_moves[0]
         else:
-            current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+            current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
             self.log_func(f"[DEBUG] Current risk: {current_risk:.3f}")
             decision_index, strategy = hybrid_decision(payoff_matrix, current_risk)
             chosen_move = eval_moves[int(decision_index)]
 
         # ПРАВКА: не змінюємо altitude миттєво — ставимо target_altitude, а в move_model робимо плавне наближення
-        uav.target_altitude = max(self.min_altitude, chosen_move["altitude"])
+        uav.target_altitude = max(self.get_local_min_altitude_for(uav), chosen_move["altitude"])
         uav.move_vector = _normalize(chosen_move["move_vector"])
         # утримання маневру (щоб не переобчислювати щосекунди)
         uav._maneuver_hold_ticks = int(1.0 / (self.timer.interval() / 1000.0))
@@ -472,7 +450,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             print("[STEP] ❌ UAV не знайдено — вихід")
             return
 
-        risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.min_altitude)
+        risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
         self.log_func(f"[STEP] Risk={risk:.3f}")
         print(f"[STEP] Risk={risk:.3f}")
 
@@ -527,7 +505,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             obj.target_altitude = getattr(obj, "altitude", obj.position[1])
 
         # захист — не дозволяємо опуститися нижче min_altitude
-        target = max(obj.target_altitude, self.min_altitude)
+        target = max(obj.target_altitude, self.get_local_min_altitude_for(obj))
 
         # максимальна швидкість зміни висоти за тик
         max_alt_change_per_tick = 1.0
@@ -540,7 +518,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         # оновлюємо фактичну висоту і позицію по Y
         obj.altitude = new_alt
-        obj.position[1] = max(new_alt, self.min_altitude)
+        obj.position[1] = max(new_alt, self.get_local_min_altitude_for(obj))
 
         # 🔹 Детальний лог для дебага
         print(f"[MOVE DEBUG] {obj.name}:")
@@ -578,4 +556,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         z = obj.position[2]
         required_min = self.kyiv_map_layer.get_min_altitude(x, z)
         return required_min
+
+    def get_local_min_altitude_for(self, obj: BaseModel3D):
+        """
+        Возвращает минимальную высоту района под объектом.
+        Добавляет небольшой запас min_altitude_margin.
+        """
+        district_min = self.kyiv_map.get_min_altitude(obj.position[0], obj.position[2])
+        return district_min + self.min_altitude_margin
 
