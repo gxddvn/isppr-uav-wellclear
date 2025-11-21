@@ -1,0 +1,11 @@
+Model Information:
+* title:	[MWT] F-22 Raptor
+* source:	https://sketchfab.com/3d-models/mwt-f-22-raptor-220f64e56c5a4474a61d3f6c9e6a4cfb
+* author:	xlisov (https://sketchfab.com/xlisov74)
+
+Model License:
+* license type:	CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+* requirements:	Author must be credited. No commercial use.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "[MWT] F-22 Raptor" (https://sketchfab.com/3d-models/mwt-f-22-raptor-220f64e56c5a4474a61d3f6c9e6a4cfb) by xlisov (https://sketchfab.com/xlisov74) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
