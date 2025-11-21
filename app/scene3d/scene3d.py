@@ -19,6 +19,7 @@ import numpy as np
 import copy
 from .kyiv_map import KyivMapLayer
 from core.map_generator import generate_kyiv_map_png, load_kyiv_districts
+from .static_obstacle import CylinderModel, SphereModel
 
 class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def __init__(self, parent=None, ml_system=None, log_func=print):
@@ -141,21 +142,38 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             obj.draw_trajectory()
 
     def add_model(self, model_type: str):
-        """Додає нову модель до сцени."""
+        model = None
+
         if model_type == "UAV":
             mesh = self.mesh_uav
             name = self.generate_unique_name("UAV")
             model = UAV(name, mesh, [0, 0, 0], [0, 0, 0])
-        else:
+
+            if mesh:
+                model.display_list = create_display_list(mesh)
+
+        elif model_type == "Obstacle":
             mesh = self.mesh_plane
-            name = self.generate_unique_name("Obstacle")
+            name = self.generate_unique_name("Plane")
             model = Obstacle(name, mesh, [0, 0, 0], [0, 0, 0])
 
-        if not mesh:
-            print(f"[Scene3D] ❌ Mesh for {model_type} not loaded")
+            if mesh:
+                model.display_list = create_display_list(mesh)
+
+        elif model_type == "Cylinder":
+            name = self.generate_unique_name("Cylinder")
+            model = CylinderModel(name, position=[0, 0, 0], radius=20, height=80)
+            # ❗ mesh не нужен → НЕ вызывать create_display_list
+
+        elif model_type == "Sphere":
+            name = self.generate_unique_name("Sphere")
+            model = SphereModel(name, position=[0, 0, 0], diameter=40)
+            # ❗ mesh не нужен → НЕ вызывать create_display_list
+
+        else:
+            print("[Scene3D] ❌ Unknown model type:", model_type)
             return None
 
-        model.display_list = create_display_list(mesh)
         self.objects.append(model)
         self.update()
         return model
@@ -304,6 +322,8 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def can_start_simulation(self):
         """Перевірка, чи всі об’єкти мають speed і altitude"""
         for obj in self.objects:
+            if isinstance(obj, (CylinderModel, SphereModel)):
+                continue
             if obj.speed <= 0 or obj.altitude <= 0:
                 return False
         return True

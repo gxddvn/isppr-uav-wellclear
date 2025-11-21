@@ -17,13 +17,23 @@ class ModelBrowser(QWidget):
         self.list = QListWidget()
         layout.addWidget(self.list)
 
-        # --- Кнопки ---
-        btn_layout = QHBoxLayout()
+        # первая строка
+        row1 = QHBoxLayout()
         self.btn_add_uav = QPushButton("➕ Додати UAV")
         self.btn_add_plane = QPushButton("➕ Додати перешкоду")
-        btn_layout.addWidget(self.btn_add_uav)
-        btn_layout.addWidget(self.btn_add_plane)
-        layout.addLayout(btn_layout)
+        row1.addWidget(self.btn_add_uav)
+        row1.addWidget(self.btn_add_plane)
+
+        # вторая строка
+        row2 = QHBoxLayout()
+        self.btn_add_cylinder = QPushButton("➕ Додати циліндр")
+        self.btn_add_sphere = QPushButton("➕ Додати сферу")
+        row2.addWidget(self.btn_add_cylinder)
+        row2.addWidget(self.btn_add_sphere)
+
+        # в интерфейс
+        layout.addLayout(row1)
+        layout.addLayout(row2)
 
         self.btn_delete = QPushButton("🗑 Видалити модель")
         self.btn_delete.setEnabled(False)
@@ -36,6 +46,8 @@ class ModelBrowser(QWidget):
         self.list.currentTextChanged.connect(self.on_model_selected)
         self.btn_add_uav.clicked.connect(lambda: self.add_model("UAV"))
         self.btn_add_plane.clicked.connect(lambda: self.add_model("Obstacle"))
+        self.btn_add_cylinder.clicked.connect(lambda: self.add_model("Cylinder"))
+        self.btn_add_sphere.clicked.connect(lambda: self.add_model("Sphere"))
         self.btn_delete.clicked.connect(self.delete_selected_model)
 
         # Ініціалізуємо список на старті

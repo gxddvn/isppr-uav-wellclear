@@ -27,20 +27,20 @@ class SimulationPanel(QWidget):
         layout.addWidget(self.speed_slider)
         layout.addStretch()
 
-        self.altitude_label = QLabel("Мін. висота (м):")
-        self.altitude_spin = QDoubleSpinBox()
-        self.altitude_spin.setRange(0, 500)  # обмеження від 0 до 500 м
-        self.altitude_spin.setValue(0)       # за замовчуванням 0
-        self.altitude_spin.setSingleStep(1)
+        # self.altitude_label = QLabel("Мін. висота (м):")
+        # self.altitude_spin = QDoubleSpinBox()
+        # self.altitude_spin.setRange(0, 500)  # обмеження від 0 до 500 м
+        # self.altitude_spin.setValue(0)       # за замовчуванням 0
+        # self.altitude_spin.setSingleStep(1)
 
-        # додаємо до layout панелі
-        altitude_layout = QHBoxLayout()
-        altitude_layout.addWidget(self.altitude_label)
-        altitude_layout.addWidget(self.altitude_spin)
-        self.layout().addLayout(altitude_layout)
+        # # додаємо до layout панелі
+        # altitude_layout = QHBoxLayout()
+        # altitude_layout.addWidget(self.altitude_label)
+        # altitude_layout.addWidget(self.altitude_spin)
+        # self.layout().addLayout(altitude_layout)
 
         # сигнал для Scene3D
-        self.altitude_spin.valueChanged.connect(self.on_min_altitude_changed)
+        # self.altitude_spin.valueChanged.connect(self.on_min_altitude_changed)
 
         # 🔹 Виклики сигналів
         self.btn_start.clicked.connect(lambda: self.start_clicked.emit())
