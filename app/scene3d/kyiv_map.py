@@ -35,9 +35,8 @@ class KyivMapLayer:
         self.texture = None
         self.districts = []
 
-        # Display list cache
-        self.district_dl = []   # list of GL list ids or None
-        self.dl_valid = False   # flag, треба пересоздати DL якщо змінились висоти/геометрія
+        self.district_dl = []
+        self.dl_valid = False
 
         self._load_geojson()
 
@@ -104,7 +103,6 @@ class KyivMapLayer:
                     "polygons": polys
                 })
 
-            # invalidate display lists — нова геометрія
             self.invalidate_display_lists()
             print("[KyivMap] ✔ GeoJSON loaded:", len(self.districts), "districts")
         except Exception as e:

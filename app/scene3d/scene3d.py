@@ -50,11 +50,10 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.camera_pitch = 25.0
         self.rotate_sensitivity = 0.5
         self.initial_states = {}
-        # Мінімальний додатковий запас над min_altitude (щоб не сідати прямо на min)
-        self.min_altitude_margin = 5.0  # м — змінюй при потребі
 
-        # Мінімальний вертикальний буфер від перешкоди (щоб не наближатися в висоті)
-        self.min_vertical_buffer = 5.0  # м — якщо маневр опускає нижче obs.altitude + buffer -> великий штраф
+        self.min_altitude_margin = 5.0
+
+        self.min_vertical_buffer = 5.0
 
         try:
             self.mesh_uav = load_gltf_model(os.path.join(BASE_DIR, r"assets\models\uav", "scene.gltf"))
@@ -163,12 +162,10 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         elif model_type == "Cylinder":
             name = self.generate_unique_name("Cylinder")
             model = CylinderModel(name, position=[0, 0, 0], radius=20, height=80)
-            # ❗ mesh не нужен → НЕ вызывать create_display_list
 
         elif model_type == "Sphere":
             name = self.generate_unique_name("Sphere")
             model = SphereModel(name, position=[0, 0, 0], diameter=40)
-            # ❗ mesh не нужен → НЕ вызывать create_display_list
 
         else:
             print("[Scene3D] ❌ Unknown model type:", model_type)
@@ -278,7 +275,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         for obj in self.objects:
             if isinstance(obj, UAV):
-                min_alt = self.get_local_min_altitude_for(obj)  # <--- вместо self.min_altitude
+                min_alt = self.get_local_min_altitude_for(obj)
                 if obj.altitude < min_alt:
                     QMessageBox.warning(
                         self,
@@ -288,7 +285,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                     return
 
         self.is_simulating = True
-        self.timer.start(50)  # оновлення кожні 50 мс (~20 FPS)
+        self.timer.start(50)
         print("[Simulation] ▶ Запущено")
 
     def pause_simulation(self):
@@ -297,10 +294,9 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         print("[Simulation] ⏸ Пауза")
 
     def resume_simulation(self):
-        """Возобновляет симуляцию без повторной проверки скоростей/высот."""
         self.is_simulating = True
         self.timer.start(50)
-        print("[Simulation] ▶ Симуляция возобновлена")
+        print("[Simulation] ▶ Simulation resumed")
 
     def stop_simulation(self):
         self.is_simulating = False
@@ -316,7 +312,7 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
     def set_min_altitude(self, value: float):
         """Задає мінімальну висоту польоту і оновлює сцену."""
         self.min_altitude = value
-        self.update()  # щоб червона зона перемальовувалась у реальному часі
+        self.update()
 
 
     def can_start_simulation(self):
@@ -329,17 +325,12 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         return True
     
     def handle_warning_zone(self, uav, obstacles):
-        """
-        Динамический подбор маневров в жёлтой зоне.
-        Риск рассчитывается для каждой итерации, пока не станет < 0.3.
-        """
         def _normalize(v):
             norm = math.sqrt(sum(c*c for c in v))
             return [c / norm if norm > 0 else 0.0 for c in v]
 
         base_forward = [0, 0, 1]
-        side_mag = 0.8
-        max_iter = 20  # максимальное количество шагов изменения высоты/смещения
+        max_iter = 20
 
         candidate_moves = [
             {"name": "Підйом", "direction": [0, 1, 0], "base_vector": base_forward.copy()},
@@ -352,9 +343,8 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
         for move in candidate_moves:
             temp_uav = copy.deepcopy(uav)
-            step = 1.0  # шаг изменения высоты или бокового смещения
+            step = 1.0
             for i in range(max_iter):
-                # корректируем altitude или смещение
                 temp_uav.altitude += move["direction"][1] * step
                 temp_uav.move_vector = [b + move["direction"][0] * step for b in move["base_vector"]]
                 temp_uav.move_vector = _normalize(temp_uav.move_vector)
@@ -364,7 +354,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                     gamma=2.0, min_altitude=self.get_local_min_altitude_for(temp_uav)
                 )
 
-                # Если риск < 0.3 — сохраняем этот вариант и выходим из цикла
                 if risk < 0.3:
                     evaluated.append({
                         "name": move["name"],
@@ -374,7 +363,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                     })
                     break
             else:
-                # Если не удалось снизить риск ниже 0.3, сохраняем последний вариант
                 evaluated.append({
                     "name": move["name"],
                     "altitude": temp_uav.altitude,
@@ -408,7 +396,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         for move in candidate_moves:
             move["move_vector"] = _normalize(move["move_vector"])
 
-        # Обчислюємо для кожного кандидата мінімальний приріст |vert_diff| по всіх перешкодах
         moves_increase_separation = []
         orig_vert_diffs = [uav.altitude - obs.altitude for obs in obstacles] if obstacles else [0.0]
 
@@ -418,17 +405,14 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             for obs_idx, obs in enumerate(obstacles):
                 orig = orig_vert_diffs[obs_idx]
                 new = move["altitude"] - obs.altitude
-                # різниця абсолютних відстаней: позитив -> збільшення відриву
                 delta = abs(new) - abs(orig)
                 if worst_delta is None or delta < worst_delta:
                     worst_delta = delta
                 if delta <= 0.0:
-                    # цей маневр не збільшує відрив для хоча б однієї перешкоди
                     increases_all = False
             if increases_all:
                 moves_increase_separation.append(move)
 
-        # Якщо є кандидати, які збільшують відрив для всіх перешкод — розглядаємо лише їх
         eval_moves = moves_increase_separation if moves_increase_separation else candidate_moves
 
         payoff_matrix = np.zeros((len(eval_moves), len(obstacles)))
@@ -454,13 +438,10 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
                 risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
 
-                # штраф за зменшення відриву: якщо |new| < |orig| -> великий штраф
                 vert_delta = abs(new_vert) - abs(orig_vert)
                 if vert_delta < 0:
-                    # чим більше зменшення — тим більший штраф
                     total_vert_penalty += (-vert_delta)
 
-                # невеликі додаткові корекції (як раніше)
                 vert_change_toward_obs = max(0.0, abs(orig_vert) - abs(new_vert))
                 risk += vert_change_toward_obs * 0.08
                 if new_vert > 10.0:
@@ -474,19 +455,13 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
 
                 total_risk += risk
 
-            # якщо ми не знайшли moves_increase_separation (тобто eval_moves == candidate_moves),
-            # додатково караємо ті маневри, що зменшують розрив сильніше
             if not moves_increase_separation:
-                # масштаб штрафу можна налаштувати (тут досить великий, щоб відсіяти "приближаючі" варіанти)
                 total_risk += total_vert_penalty * 5.0
 
             payoff_matrix[i, :] = total_risk
             self.log_func(f"[DEBUG] Eval Move '{move['name']}' -> alt={move['altitude']}, total_risk={total_risk:.3f}, vert_penalty={total_vert_penalty:.3f}")
 
-        # Якщо ми фільтрували — треба відновити індексацію до оригінальної таблиці для вибору імені
-        chosen_idx = 0
         if len(eval_moves) == 0:
-            # нестандартна ситуація; вибираємо перший кандидат
             chosen_move = candidate_moves[0]
         else:
             current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system, gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
@@ -494,10 +469,8 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             decision_index, strategy = hybrid_decision(payoff_matrix, current_risk)
             chosen_move = eval_moves[int(decision_index)]
 
-        # ПРАВКА: не змінюємо altitude миттєво — ставимо target_altitude, а в move_model робимо плавне наближення
         uav.target_altitude = max(self.get_local_min_altitude_for(uav), chosen_move["altitude"])
         uav.move_vector = _normalize(chosen_move["move_vector"])
-        # утримання маневру (щоб не переобчислювати щосекунди)
         uav._maneuver_hold_ticks = int(1.0 / (self.timer.interval() / 1000.0))
         self.log_func(f"[MANEUVER] Selected '{chosen_move['name']}' alt_target={uav.target_altitude}, vec={uav.move_vector}, strategy={strategy if 'strategy' in locals() else 'N/A'}")
 
@@ -518,21 +491,16 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.log_func(f"[STEP] Risk={risk:.3f}")
         print(f"[STEP] Risk={risk:.3f}")
 
-        # 🔹 Проверка удержания маневра в жёлтой зоне
         if hasattr(uav, "_maneuver_in_progress") and uav._maneuver_in_progress:
-            # Пока маневр выполняется — просто двигаем модель
             for obj in self.objects:
                 self.move_model(obj)
             self.update()
-            # Проверяем завершение маневра по фактическому риску
             current_risk = compute_collaborative_risk(uav, obstacles, self.ml_system,
                                                     gamma=2.0, min_altitude=self.get_local_min_altitude_for(uav))
             if current_risk < 0.3 or current_risk >= 0.7:
-                # Маневр завершен (вышли из жёлтой зоны)
                 uav._maneuver_in_progress = False
             return
 
-        # 🔹 Зеленая зона
         if risk < 0.3:
             print(f"[STEP Low] Risk={risk:.3f}")
             for obj in self.objects:
@@ -540,15 +508,11 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             self.update()
             return
 
-        # 🔹 Жёлтая зона
         elif risk < 0.7:
-            # Ставим паузу
             self.pause_simulation()
 
-            # Считаем маневры как в красной зоне, но без выбора
             evaluated = self.handle_warning_zone(uav, obstacles)
 
-            # Формируем отображение в модалке
             options = [f"{m['name']} (ризик {int(m['risk']*100)}%)" for m in evaluated]
 
             choice, ok = QInputDialog.getItem(
@@ -564,15 +528,11 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
                 idx = options.index(choice)
                 move = evaluated[idx]
 
-                # Применяем манёвр
                 uav.target_altitude = move["altitude"]
                 uav.move_vector = move["move_vector"]
-                uav._maneuver_in_progress = True  # включаем удержание
-
-                # Возобновляем симуляцию
+                uav._maneuver_in_progress = True
                 self.resume_simulation()
 
-        # 🔹 Красная зона
         else:
             print(f"[STEP Danger] Risk={risk:.3f}")
             if hasattr(uav, "_maneuver_hold_ticks") and uav._maneuver_hold_ticks > 0:
@@ -580,7 +540,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             else:
                 self.handle_danger_zone(uav, obstacles)
 
-        # 🔹 Движение всех моделей
         for obj in self.objects:
             if isinstance(obj, (UAV, Obstacle)):
                 self.move_model(obj)
@@ -588,10 +547,6 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         self.update()
 
     def get_movement_vector(self, obj):
-        """
-        Переводим локальный move_vector в мировую систему
-        с учётом текущего yaw модели
-        """
         yaw_rad = math.radians(-obj.rotation[1])
         lx, ly, lz = obj.move_vector
 
@@ -606,20 +561,16 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
         Рух моделі по x/z згідно move_vector, і поступова корекція висоти до obj.target_altitude.
         Максимальна зміна висоти за тик — max_alt_change_per_tick (м).
         """
-        # (рух по площині)
         speed_ms = (obj.speed / 3.6) * 0.05 * self.sim_speed
         fx, fy, fz = self.get_movement_vector(obj)
         obj.position[0] += fx * speed_ms
         obj.position[2] += fz * speed_ms
 
-        # Плавне наближення висоти
         if not hasattr(obj, "target_altitude"):
             obj.target_altitude = getattr(obj, "altitude", obj.position[1])
 
-        # захист — не дозволяємо опуститися нижче min_altitude
         target = max(obj.target_altitude, self.get_local_min_altitude_for(obj))
 
-        # максимальна швидкість зміни висоти за тик
         max_alt_change_per_tick = 1.0
         diff = target - obj.altitude
         if abs(diff) <= 1e-6:
@@ -628,42 +579,22 @@ class Scene3D(QOpenGLWidget, SceneMouseHandler):
             change = math.copysign(min(abs(diff), max_alt_change_per_tick), diff)
         new_alt = obj.altitude + change
 
-        # оновлюємо фактичну висоту і позицію по Y
         obj.altitude = new_alt
         obj.position[1] = max(new_alt, self.get_local_min_altitude_for(obj))
-
-        # 🔹 Детальний лог для дебага
-        print(f"[MOVE DEBUG] {obj.name}:")
-        print(f"    speed_ms = {speed_ms:.3f}")
-        print(f"    move_vector_local = {obj.move_vector}")
-        print(f"    move_vector_world = [{fx:.3f}, {fy:.3f}, {fz:.3f}]")
-        print(f"    position_before = {obj.position[0]-fx*speed_ms:.3f}, {obj.position[1]:.3f}, {obj.position[2]-fz*speed_ms:.3f}")
-        print(f"    target_altitude = {obj.target_altitude:.3f}")
-        print(f"    diff = {diff:.3f}")
-        print(f"    change = {change:.3f}")
-        print(f"    altitude_after = {obj.altitude:.3f}")
-        print(f"    position_after = {obj.position}")
-
 
     def apply_model_altitudes(self):
         """Оновлює висоту моделей відповідно до параметрів altitude і ініціалізує target_altitude."""
         for obj in self.objects:
-            # синхронізуємо позицію з прописаною altitude
             obj.position[1] = obj.altitude
-            # встановлюємо початкову цільову висоту = поточна
             obj.target_altitude = obj.altitude
         self.update()
 
     def on_district_heights_updated(self, mapping: dict):
-        # mapping: {name: min_alt}
-        # тут можна, наприклад, оновити підсвітку, перерендер тощо
         self.update()
         if callable(getattr(self, "log", None)):
             self.log(f"[Scene3D] Оновлено мін. висоти районів ({len(mapping)} записів)")
 
-    # приклад використання при перевірках (наприклад під час симуляції)
     def check_min_altitude_for_object(self, obj):
-        # obj має координати (x,y,z) або (lon/lat) — приклад для локальної сцени:
         x = obj.position[0]
         z = obj.position[2]
         required_min = self.kyiv_map_layer.get_min_altitude(x, z)

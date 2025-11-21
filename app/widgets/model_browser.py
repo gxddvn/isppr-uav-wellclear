@@ -17,21 +17,18 @@ class ModelBrowser(QWidget):
         self.list = QListWidget()
         layout.addWidget(self.list)
 
-        # первая строка
         row1 = QHBoxLayout()
         self.btn_add_uav = QPushButton("➕ Додати UAV")
         self.btn_add_plane = QPushButton("➕ Додати перешкоду")
         row1.addWidget(self.btn_add_uav)
         row1.addWidget(self.btn_add_plane)
 
-        # вторая строка
         row2 = QHBoxLayout()
         self.btn_add_cylinder = QPushButton("➕ Додати циліндр")
         self.btn_add_sphere = QPushButton("➕ Додати сферу")
         row2.addWidget(self.btn_add_cylinder)
         row2.addWidget(self.btn_add_sphere)
 
-        # в интерфейс
         layout.addLayout(row1)
         layout.addLayout(row2)
 

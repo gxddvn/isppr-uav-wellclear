@@ -19,17 +19,15 @@ class UAV(BaseModel3D):
         glRotatef(self.rotation[1], 0, 1, 0)
         glScalef(self.scale, self.scale, self.scale)
 
-        # малюємо модель
         if self.display_list:
             glCallList(self.display_list)
 
-        # малюємо safe zones
         visual_scale = self.scale + 0.5
         colors = {"green": (0, 1, 0), "yellow": (1, 1, 0), "red": (1, 0, 0)}
         prev_radius = 0
         for name, radius in self.safe_zones.items():
             draw_ring(
-                position=(0, 0, 0),  # в локальному просторі моделі
+                position=(0, 0, 0),
                 inner_radius=prev_radius * visual_scale,
                 outer_radius=radius * visual_scale,
                 color=colors[name],
@@ -37,7 +35,6 @@ class UAV(BaseModel3D):
             )
             prev_radius = radius
 
-        # --- Підсвічування вибраного ---
         if selected:
             draw_outline(self.display_list)
             draw_axis_gizmo()

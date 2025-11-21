@@ -14,7 +14,6 @@ def paintGL(self):
     glLoadIdentity()
     apply_camera(self)
 
-    # 🔥 зберігаємо поточні матриці камери
     self._modelview = glGetDoublev(GL_MODELVIEW_MATRIX)
     self._projection = glGetDoublev(GL_PROJECTION_MATRIX)
     self._viewport = glGetIntegerv(GL_VIEWPORT)

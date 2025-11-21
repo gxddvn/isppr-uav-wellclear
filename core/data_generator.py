@@ -4,7 +4,7 @@ import os
 
 def generate_synthetic_dataset(
     num_samples=10000,
-    danger_ratio=0.3,  # Доля опасных сценариев
+    danger_ratio=0.3,
     output_dir="../ml/datasets/synthetic"
 ):
     os.makedirs(output_dir, exist_ok=True)
@@ -13,7 +13,6 @@ def generate_synthetic_dataset(
     num_danger = int(num_samples * danger_ratio)
     num_safe = num_samples - num_danger
 
-    # --- Безопасные сценарии ---
     for _ in range(num_safe):
         v1 = np.random.uniform(5, 50)
         v2 = np.random.uniform(5, 50)
@@ -23,12 +22,10 @@ def generate_synthetic_dataset(
         alt1 = np.random.uniform(0, 500)
         alt2 = np.random.uniform(0, 500)
 
-        # Новые признаки
         alt_diff = alt1 - alt2
-        heading_diff = (heading1 - heading2 + 180) % 360 - 180  # разница курсов в [-180, 180]
+        heading_diff = (heading1 - heading2 + 180) % 360 - 180
         speed_diff = v1 - v2
 
-        # Риск: чем больше расстояние и разница высот/курсов, тем ниже
         collision_risk = np.clip(
             0.2 * (1 - distance/5000) + 
             0.3 * (1 - abs(heading_diff)/180) + 
@@ -38,7 +35,6 @@ def generate_synthetic_dataset(
 
         data.append([v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff, collision_risk])
 
-    # --- Опасные сценарии ---
     for _ in range(num_danger):
         v1 = np.random.uniform(5, 50)
         v2 = np.random.uniform(5, 50)

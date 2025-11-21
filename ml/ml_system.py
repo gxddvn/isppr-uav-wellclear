@@ -46,7 +46,6 @@ class MLSystem:
         if not os.path.exists(self.model_path):
             raise FileNotFoundError("Модель не знайдена. Виконай train_and_save().")
         
-        # Создаем модель и загружаем веса
         model = CollisionModel(INPUT_DIM)
         state_dict = torch.load(self.model_path, map_location=torch.device("cpu"))
         model.load_state_dict(state_dict)
@@ -57,7 +56,6 @@ class MLSystem:
 
     def train_and_save(self):
         dataset_path = os.path.join(self.dataset_dir, "synthetic_dataset.csv")
-        # Загружаем CSV через pandas
         df = pd.read_csv(dataset_path)
         X = df.drop("collision_risk", axis=1).values
         y = df["collision_risk"].values
@@ -65,12 +63,10 @@ class MLSystem:
         if X.shape[1] != INPUT_DIM:
             raise ValueError(f"Dataset has {X.shape[1]} features, expected {INPUT_DIM}")
 
-        # Масштабирование
         self.scaler = StandardScaler()
         X_scaled = self.scaler.fit_transform(X)
         joblib.dump(self.scaler, self.scaler_path)
 
-        # Конвертируем в тензоры
         X_tensor = torch.tensor(X_scaled, dtype=torch.float32)
         y_tensor = torch.tensor(y.reshape(-1, 1), dtype=torch.float32)
 

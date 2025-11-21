@@ -6,10 +6,9 @@ import math
 class StaticObstacle:
     def __init__(self, position=(0, 0, 0)):
         self.position = position  # x, y, z
-        self.color = (0.5, 0.5, 0.5)  # серый по умолчанию
+        self.color = (0.5, 0.5, 0.5)
 
     def draw(self):
-        # Метод отрисовки будет переопределяться в наследниках
         pass
 
     def set_color(self, color):
@@ -21,7 +20,7 @@ class CylinderModel(BaseModel3D):
         super().__init__(name, None, position, [0, 0, 0])
         self.radius = radius
         self.height = height
-        self.color = (1.0, 1.0, 0.0)  # Жёлтый
+        self.color = (1.0, 1.0, 0.0)
 
     def draw(self, selected=False):
         glPushMatrix()
@@ -32,19 +31,16 @@ class CylinderModel(BaseModel3D):
         else:
             glColor3f(*self.color)
 
-        # Поворачиваем цилиндр, чтобы он стоял вертикально
         glRotatef(-90, 1, 0, 0)
 
         quad = gluNewQuadric()
         gluCylinder(quad, self.radius, self.radius, self.height, 32, 1)
 
-        # Верхняя крышка
         glPushMatrix()
         glTranslatef(0, 0, self.height)
         gluDisk(quad, 0, self.radius, 32, 1)
         glPopMatrix()
 
-        # Нижняя крышка
         gluDisk(quad, 0, self.radius, 32, 1)
 
         gluDeleteQuadric(quad)
@@ -54,7 +50,7 @@ class SphereModel(BaseModel3D):
     def __init__(self, name, position=(0,0,0), diameter=20):
         super().__init__(name, None, position, [0, 0, 0])
         self.diameter = diameter
-        self.color = (0.6, 0.0, 0.8)  # Фиолетовый
+        self.color = (0.6, 0.0, 0.8)
 
     def draw(self, selected=False):
         glPushMatrix()

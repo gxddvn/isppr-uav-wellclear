@@ -7,7 +7,7 @@ from ml.models import CollisionModel
 
 MODEL_PATH = "./ml/models/collision_model_weights.pt"
 SCALER_PATH = MODEL_PATH.replace("_weights.pt", "_scaler.pkl")
-DATASET_PATH = "./ml/datasets/synthetic/synthetic_dataset.csv"  # замените на ваш датасет
+DATASET_PATH = "./ml/datasets/synthetic/synthetic_dataset.csv"
 
 def load_dataset(path):
     data = np.loadtxt(path, delimiter=",")
@@ -18,10 +18,8 @@ def evaluate_model():
     if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
         raise FileNotFoundError("Модель или scaler не найдены. Сначала выполните train_and_save().")
     
-    # Загружаем scaler
     scaler = joblib.load(SCALER_PATH)
     
-    # Загружаем модель
     input_dim = None
     X, y = load_dataset(DATASET_PATH)
     input_dim = X.shape[1]
@@ -30,14 +28,12 @@ def evaluate_model():
     model.load_state_dict(state_dict)
     model.eval()
     
-    # Применяем scaler
     X_scaled = scaler.transform(X)
     X_tensor = torch.tensor(X_scaled, dtype=torch.float32)
     
     with torch.no_grad():
         y_pred = model(X_tensor).numpy().flatten()
     
-    # Метрики
     y_pred_label = (y_pred >= 0.5).astype(int)
     acc = accuracy_score(y, y_pred_label)
     auc = roc_auc_score(y, y_pred)

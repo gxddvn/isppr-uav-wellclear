@@ -13,7 +13,6 @@ class BaseModel3D:
         self.scale = scale
         self.display_list = None
 
-        # Вектор движения модели (локальный)
         self.move_vector = list(move_vector)
         self.initial_rotation = self.rotation.copy()
 
@@ -27,7 +26,6 @@ class BaseModel3D:
         if self.mesh and self.display_list:
             glCallList(self.display_list)
 
-        # --- Підсвічування вибраного об’єкта ---
         if selected:
             draw_outline(self.display_list)
             draw_axis_gizmo()

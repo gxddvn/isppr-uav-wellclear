@@ -109,8 +109,6 @@ class MainWindow(QMainWindow):
         self.sim_panel.pause_clicked.connect(self.scene3d.pause_simulation)
         self.sim_panel.stop_clicked.connect(self.scene3d.stop_simulation)
 
-        # self.sim_panel.min_altitude_changed.connect(self.scene3d.set_min_altitude)
-
         # регулювання швидкості
         self.sim_panel.speed_changed.connect(self.on_speed_changed)
 
@@ -218,9 +216,8 @@ if __name__ == "__main__":
     #ТЕСТ Приклад використання:
     v1, v2, heading1, heading2, distance, alt1, alt2 = 30, 25, 10, 20, 400, 100, 110
 
-    # Вычисляем новые признаки
     alt_diff = alt1 - alt2
-    heading_diff = (heading1 - heading2 + 180) % 360 - 180  # разница в диапазоне [-180, 180]
+    heading_diff = (heading1 - heading2 + 180) % 360 - 180
     speed_diff = v1 - v2
 
     # Полный список признаков для модели

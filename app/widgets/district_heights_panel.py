@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt
 
 class DistrictHeightsPanel(QWidget):
-    # емитить, коли зміни відбуваються: дає повний словник {name: min_alt}
     heights_updated = pyqtSignal(dict)
 
     def __init__(self, kyiv_map_layer, parent=None):
@@ -41,7 +40,7 @@ class DistrictHeightsPanel(QWidget):
             self.table.setItem(i, 0, name_item)
 
             spin = QSpinBox()
-            spin.setRange(0, 5000)  # діапазон у метрах, змініть при потребі
+            spin.setRange(0, 5000)
             spin.setValue(int(d.get("min_altitude", 0)))
             spin.valueChanged.connect(self._make_on_value_changed(i))
             self.table.setCellWidget(i, 1, spin)
@@ -49,9 +48,7 @@ class DistrictHeightsPanel(QWidget):
     def _make_on_value_changed(self, row):
         def handler(val):
             name = self.table.item(row, 0).text()
-            # оновлюємо модель
             self.kyiv.set_min_altitude_for_district_by_name(name, float(val))
-            # емитимо повний словник
             mapping = {d["name"]: d["min_altitude"] for d in self.kyiv.districts}
             self.heights_updated.emit(mapping)
         return handler

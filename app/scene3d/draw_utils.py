@@ -3,14 +3,10 @@ import math
 from .kyiv_map import KyivMapLayer
 
 def draw_grid(map_layer, step=500):
-    """
-    Рисуем сетку по размеру карты, чтобы совпадала с текстурой.
-    """
     glDisable(GL_LIGHTING)
     glColor3f(0.3, 0.3, 0.3)
 
-    # Берем размер карты из draw() (±size)
-    size = 500  # должен совпадать с map_layer.draw() 
+    size = 500
     glBegin(GL_LINES)
     for i in range(-size, size+1, step):
         x = float(i)
@@ -28,9 +24,8 @@ def draw_outline(display_list):
     if not display_list:
         return
     glEnable(GL_BLEND)
-    glColor3f(0.2, 0.5, 1.0)  # синя рамка
+    glColor3f(0.2, 0.5, 1.0)
     glLineWidth(3.0)
-    # просто викликаємо display_list як каркас або контур
     glCallList(display_list)
     glLineWidth(1.0)
     glDisable(GL_BLEND)
@@ -38,18 +33,17 @@ def draw_outline(display_list):
 
 
 def draw_axis_gizmo(length=50.0):
-    """Малює осі X/Y/Z у поточному локальному просторі"""
     glLineWidth(2.0)
     glBegin(GL_LINES)
-    # X - червона
+
     glColor3f(1.0, 0.0, 0.0)
     glVertex3f(0, 0, 0)
     glVertex3f(length, 0, 0)
-    # Y - зелена
+
     glColor3f(0.0, 1.0, 0.0)
     glVertex3f(0, 0, 0)
     glVertex3f(0, length, 0)
-    # Z - синя
+
     glColor3f(0.0, 0.0, 1.0)
     glVertex3f(0, 0, 0)
     glVertex3f(0, 0, length)
@@ -79,31 +73,18 @@ def draw_axis_arrow(pos, dir_vec, color=(1, 1, 1)):
 
 
 def draw_trajectory(pos, yaw, color=(1.0,1.0,1.0), length=50.0, forward_vector=(0,0,1), width=3.0):
-    """
-    Рисует траекторию модели от носа в направлении её forward_vector с учётом yaw.
-    
-    :param pos: [x, y, z] — позиция модели (центр)
-    :param yaw: float — поворот модели вокруг Y (в градусах)
-    :param color: RGB кортеж
-    :param length: длина траектории
-    :param forward_vector: локальная ось “вперед” модели (x, y, z)
-    """
     x, y, z = pos
     fx, fy, fz = forward_vector
 
-    # Преобразуем локальный forward в мировой с учётом yaw
-    # yaw = вращение вокруг Y
     yaw_rad = math.radians(yaw)
     world_fx = fx * math.cos(yaw_rad) + fz * math.sin(yaw_rad)
     world_fz = -fx * math.sin(yaw_rad) + fz * math.cos(yaw_rad)
-    world_fy = fy  # Y не меняется
+    world_fy = fy
 
-    # Начало траектории — нос
     nose_x = x + world_fx * length
     nose_y = y + world_fy * length
     nose_z = z + world_fz * length
 
-    # Конец линии — центр модели (или tail)
     tail_x = x
     tail_y = y
     tail_z = z
@@ -154,7 +135,7 @@ def draw_ring(position, outer_radius=100.0, inner_radius=None, color=(0.2, 0.8, 
     glPopMatrix()
 
 def draw_cube(self, size=1.0):
-    hs = size / 2.0  # половина розміру
+    hs = size / 2.0
     glBegin(GL_QUADS)
 
     # front
