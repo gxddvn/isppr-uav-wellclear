@@ -4,7 +4,6 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import torch
 from ml.ml_system import MLSystem
 
 from PyQt6.QtWidgets import (
@@ -27,50 +26,40 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ISPPR-BPLA")
         self.resize(1280, 720)
 
-        # === Меню ===
         self._create_menu()
 
-        # === Центральна зона ===
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(2)
 
-        # === Верхня частина: сцена + панелі ===
         splitter = QSplitter(Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, stretch=10)
 
-        # === Нижня частина: консоль ===
         self.console = ConsolePanel()
         main_layout.addWidget(self.console, stretch=2)
 
-        # === Ініціалізація AI ===
         if ml_system is not None:
             self.ml_system = ml_system
         else:
             from ml.ml_system import MLSystem
             self.ml_system = MLSystem(log_func=self.console.log)
 
-        #ТЕСТ Приклад використання:
         v1, v2, heading1, heading2, distance, alt1, alt2 = 30, 25, 10, 20, 400, 100, 110
 
-        # Вычисляем новые признаки
         alt_diff = alt1 - alt2
-        heading_diff = (heading1 - heading2 + 180) % 360 - 180  # разница в диапазоне [-180, 180]
+        heading_diff = (heading1 - heading2 + 180) % 360 - 180
         speed_diff = v1 - v2
 
-        # Полный список признаков для модели
         features = [v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff]
 
         risk = ml_system.predict(features)
         print(f"Collision risk: {risk:.2f}")
         
-        # Сцена (центр)
         self.scene3d = Scene3D(self, ml_system=self.ml_system, log_func=self.console.log)
         splitter.addWidget(self.scene3d)
         
-        # Ліва панель з вкладками
         left_tabs = QTabWidget()
         self.model_browser = ModelBrowser(self.scene3d)
         self.properties_panel = PropertiesPanel()
@@ -87,16 +76,13 @@ class MainWindow(QMainWindow):
         self.model_browser.selection_changed.connect(self.properties_panel.set_model)
         self.properties_panel.model_updated.connect(self.scene3d.update_initial_state)
 
-        # додаємо зв'язок для оновлення висоти моделі
         self.properties_panel.model_updated.connect(self.on_model_updated)
 
-        # Панель управління симуляцією (справа)
         self.sim_panel = SimulationPanel()
         splitter.addWidget(self.sim_panel)
 
         splitter.setSizes([250, 900, 250])
 
-        # === Статусбар ===
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Готово")
@@ -109,7 +95,6 @@ class MainWindow(QMainWindow):
         self.sim_panel.pause_clicked.connect(self.scene3d.pause_simulation)
         self.sim_panel.stop_clicked.connect(self.scene3d.stop_simulation)
 
-        # регулювання швидкості
         self.sim_panel.speed_changed.connect(self.on_speed_changed)
 
     def on_speed_changed(self, speed_factor: float):
@@ -117,29 +102,22 @@ class MainWindow(QMainWindow):
         self.console.log(f"[Simulation] 🔧 Швидкість ×{speed_factor:.1f}")
 
     def on_model_updated(self, model):
-        # Оновлюємо позицію моделі на сцені
-        model.position[1] = model.altitude  # висота
-        self.scene3d.update()  # перемалювати сцену
+        model.position[1] = model.altitude
+        self.scene3d.update()
 
     def _create_menu(self):
         menubar = QMenuBar()
         self.setMenuBar(menubar)
 
-        # === Меню "Файл" ===
         file_menu = menubar.addMenu("Файл")
 
         action_new = file_menu.addAction("Новий проєкт")
-        # action_open = file_menu.addAction("Відкрити...")
-        # action_save = file_menu.addAction("Зберегти")
         file_menu.addSeparator()
         action_exit = file_menu.addAction("Вихід")
 
         action_new.triggered.connect(self.new_project)
-        # action_open.triggered.connect(self.open_project)
-        # action_save.triggered.connect(self.save_project)
         action_exit.triggered.connect(self.close)
 
-        # === Меню "Вид" ===
         view_menu = menubar.addMenu("Вид")
 
         toggle_console_action = view_menu.addAction("Показати/сховати консоль")
@@ -147,7 +125,6 @@ class MainWindow(QMainWindow):
         toggle_console_action.setChecked(True)
         toggle_console_action.triggered.connect(self.toggle_console)
 
-        # === Меню "Допомога" ===
         help_menu = menubar.addMenu("Допомога")
 
         about_action = help_menu.addAction("Про програму")
@@ -163,19 +140,15 @@ class MainWindow(QMainWindow):
         )
 
         if confirm == QMessageBox.StandardButton.Yes:
-            # 🔹 1. Очистити сцену
             self.scene3d.objects.clear()
             self.scene3d.update()
 
-            # 🔹 2. Скинути вибір і властивості
             self.scene3d.selected = None
             self.properties_panel.set_model(None)
 
-            # 🔹 3. Оновити список моделей
             if hasattr(self.model_browser, "refresh_list"):
                 self.model_browser.refresh_list()
 
-            # 🔹 4. Лог і статус
             self.console.log("[Файл] Створено новий порожній проєкт")
             self.status_bar.showMessage("Новий проєкт створено")
 
@@ -183,14 +156,12 @@ class MainWindow(QMainWindow):
     def open_project(self):
         path, _ = QFileDialog.getOpenFileName(self, "Відкрити файл проєкту", "", "JSON Files (*.json);;All Files (*)")
         if path:
-            # TODO: завантажити дані з JSON
             self.console.log(f"[Файл] Відкрито файл: {path}")
             self.status_bar.showMessage(f"Відкрито {path}")
 
     def save_project(self):
         path, _ = QFileDialog.getSaveFileName(self, "Зберегти проєкт", "", "JSON Files (*.json)")
         if path:
-            # TODO: серіалізувати сцену і дані у JSON
             self.console.log(f"[Файл] Збережено проєкт: {path}")
             self.status_bar.showMessage("Проєкт збережено")
 
@@ -210,17 +181,14 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-    # === Ініціалізація AI ===
     ml_system = MLSystem()
 
-    #ТЕСТ Приклад використання:
     v1, v2, heading1, heading2, distance, alt1, alt2 = 30, 25, 10, 20, 400, 100, 110
 
     alt_diff = alt1 - alt2
     heading_diff = (heading1 - heading2 + 180) % 360 - 180
     speed_diff = v1 - v2
 
-    # Полный список признаков для модели
     features = [v1, v2, heading1, heading2, distance, alt1, alt2, alt_diff, heading_diff, speed_diff]
 
     risk = ml_system.predict(features)
